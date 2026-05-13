@@ -93,227 +93,225 @@
     <div class="install-banner" id="install-banner"><span>📲 Install SpeakNote for offline use</span><button onclick="installPWA()">Install</button></div>
     <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
     <script>
-    const APP_VERSION = '1.0';
-    const APP_BUILD = '2026-05-12-1';
+const APP_VERSION = '1.0';
+const APP_BUILD = '2026-05-12-1';
 
-    const LANG_NAMES = {
-        'en-US': 'English', 'es-ES': 'Español', 'fr-FR': 'Français', 'de-DE': 'Deutsch',
-        'it-IT': 'Italiano', 'pt-BR': 'Português', 'ja-JP': '日本語', 'ko-KR': '한국어',
-        'zh-CN': '中文', 'nl-NL': 'Nederlands'
+const LANG_NAMES = {
+    'en-US': 'English', 'es-ES': 'Español', 'fr-FR': 'Français', 'de-DE': 'Deutsch',
+    'it-IT': 'Italiano', 'pt-BR': 'Português', 'ja-JP': '日本語', 'ko-KR': '한국어',
+    'zh-CN': '中文', 'nl-NL': 'Nederlands'
+};
+
+let state = {
+    entries: [], isListening: false, recognition: null, wakeLock: null,
+    settings: { autorestart: true, lang: 'en-US' },
+    consecutiveErrors: 0, lastCmdTime: 0
+};
+let deferredPrompt = null;
+
+const els = {
+    status: document.getElementById('status'), mainBtn: document.getElementById('main-btn'),
+    btnIcon: document.getElementById('btn-icon'), btnText: document.getElementById('btn-text'),
+    notes: document.getElementById('notes'), toast: document.getElementById('toast'),
+    noSleep: document.getElementById('no-sleep')
+};
+
+function init() {
+    loadSettings();
+    setupInstall();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+
+function setLang(lang) {
+    state.settings.lang = lang;
+    document.querySelectorAll('.lang-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.lang === lang); });
+    if (state.recognition) {
+        state.recognition.lang = lang;
+        if (state.isListening) { stopListening(); setTimeout(toggleListening, 300); }
+    }
+    saveSettings();
+    showToast('Language: ' + LANG_NAMES[lang], 'success');
+}
+
+function addEntry(type, text, editable) {
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const entry = { type: type, text: text, time: time, ts: Date.now(), editable: !!editable };
+    state.entries.unshift(entry);
+    renderEntry(entry, true);
+    while (state.entries.length > 200) { state.entries.pop(); removeLastEntry(); }
+}
+
+function renderEntry(entry, prepend) {
+    const div = document.createElement('div');
+    div.className = 'entry';
+    div.dataset.ts = entry.ts;
+    const cls = entry.type === 'voice' ? 'entry-voice' : entry.type === 'manual' ? 'entry-manual' : '';
+    const label = entry.type === 'voice' ? 'VOICE' : entry.type === 'manual' ? 'NOTE' : '';
+    if (entry.editable) {
+        div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><textarea rows="1" oninput="autoResize(this); updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
+    } else {
+        div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><div class="entry-text">' + escapeHtml(entry.text) + '</div>';
+    }
+    const header = els.notes.querySelector('.notes-header');
+    if (prepend && header && header.nextSibling) els.notes.insertBefore(div, header.nextSibling);
+    else els.notes.appendChild(div);
+    if (entry.editable) {
+        const ta = div.querySelector('textarea');
+        autoResize(ta);
+        ta.focus();
+    }
+}
+
+function autoResize(ta) {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+}
+
+function updateEntry(ta) {
+    const ts = parseInt(ta.parentElement.dataset.ts);
+    const e = state.entries.find(function(x) { return x.ts === ts; });
+    if (e) e.text = ta.value;
+}
+
+function removeLastEntry() {
+    const entries = els.notes.querySelectorAll('.entry');
+    if (entries.length) entries[entries.length - 1].remove();
+}
+
+function escapeHtml(t) {
+    const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
+}
+
+function addManualNote() {
+    addEntry('manual', '', true);
+}
+
+function undoLast() {
+    if (state.entries.length === 0) { showToast('Nothing to undo', 'error'); return; }
+    state.entries.shift();
+    const first = els.notes.querySelector('.entry');
+    if (first) first.remove();
+    showToast('Undone', 'success');
+}
+
+function clearNotes() {
+    state.entries = [];
+    const header = els.notes.querySelector('.notes-header');
+    els.notes.innerHTML = ''; if (header) els.notes.appendChild(header);
+    showToast('Notes cleared', 'success');
+}
+
+function buildText() {
+    const lines = state.entries.slice().reverse().map(function(e) {
+        const label = e.type === 'voice' ? '[VOICE]' : e.type === 'manual' ? '[NOTE]' : '';
+        var indented = e.text.split(/\r?\n/).map(function(line) { return '    ' + line; }).join('\n');
+        return e.time + '  ' + label + '\n' + indented;
+    });
+    return lines.join('\n\n');
+}
+
+function copyToClipboard() {
+    if (state.entries.length === 0) { showToast('No notes to copy', 'error'); return; }
+    const text = buildText();
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('Copied to clipboard!', 'success');
+    }).catch(function() {
+        showToast('Copy failed', 'error');
+    });
+}
+
+function exportText() {
+    if (state.entries.length === 0) { showToast('No notes to export', 'error'); return; }
+    const text = buildText();
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0,10) + '.txt';
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Exported!', 'success');
+}
+
+function processCommand(t) {
+    const now = Date.now();
+    if (now - state.lastCmdTime < 400) return;
+    state.lastCmdTime = now;
+    state.consecutiveErrors = 0;
+    if (t.length < 1) return;
+    if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('manual', 'Stopped by voice'); }
+    else { addEntry('voice', t); }
+}
+
+function setupRecog() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast('Speech recognition not supported', 'error'); return false; }
+    state.recognition = new SR();
+    state.recognition.continuous = true;
+    state.recognition.interimResults = false;
+    state.recognition.lang = state.settings.lang;
+    state.recognition.onstart = function() {
+        state.isListening = true; state.consecutiveErrors = 0;
+        updateStatus('listening', 'Listening...'); updateMainBtn();
+        addEntry('manual', '🎙️ Microphone active (' + LANG_NAMES[state.settings.lang] + ')');
     };
-
-    let state = {
-        entries: [], isListening: false, recognition: null, wakeLock: null,
-        settings: { autorestart: true, lang: 'en-US' },
-        consecutiveErrors: 0, lastCmdTime: 0
+    state.recognition.onresult = function(e) {
+        const r = e.results[e.results.length-1];
+        if (r.isFinal) processCommand(r[0].transcript.trim());
     };
-    let deferredPrompt = null;
-
-    const els = {
-        status: document.getElementById('status'), mainBtn: document.getElementById('main-btn'),
-        btnIcon: document.getElementById('btn-icon'), btnText: document.getElementById('btn-text'),
-        notes: document.getElementById('notes'), toast: document.getElementById('toast'),
-        noSleep: document.getElementById('no-sleep')
+    state.recognition.onerror = function(e) {
+        state.consecutiveErrors++;
+        if (e.error === 'no-speech') addEntry('manual', 'No speech detected');
+        else if (e.error === 'not-allowed') { updateStatus('error', 'Mic denied'); showToast('Allow microphone access', 'error'); stopListening(); return; }
+        else { updateStatus('error', e.error); addEntry('manual', 'Error: ' + e.error); }
+        if (state.settings.autorestart && state.isListening && state.consecutiveErrors < 5) {
+            setTimeout(function() { if (state.isListening) safeStart(); }, 500);
+        } else if (state.consecutiveErrors >= 5) { updateStatus('error', 'Too many errors'); stopListening(); }
     };
+    state.recognition.onend = function() { if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 100); };
+    return true;
+}
 
-    function init() {
-        loadSettings();
-        setupInstall();
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+function safeStart() { if (!state.recognition) return; try { state.recognition.start(); } catch(e) { if (e.name !== 'InvalidStateError') console.error(e); } }
+
+async function toggleListening() {
+    if (state.isListening) stopListening();
+    else {
+        if (!state.recognition) { if (!setupRecog()) return; }
+        try { state.recognition.lang = state.settings.lang; state.recognition.start(); await acquireWakeLock(); }
+        catch(e) { showToast('Could not start: '+e.message, 'error'); }
     }
+}
 
-    function setLang(lang) {
-        state.settings.lang = lang;
-        document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
-        if (state.recognition) {
-            state.recognition.lang = lang;
-            if (state.isListening) { stopListening(); setTimeout(toggleListening, 300); }
-        }
-        saveSettings();
-        showToast('Language: ' + LANG_NAMES[lang], 'success');
-    }
+function stopListening() {
+    state.isListening = false; state.consecutiveErrors = 0;
+    if (state.recognition) try { state.recognition.stop(); } catch(e){}
+    releaseWakeLock();
+    updateStatus('idle', 'Idle'); updateMainBtn();
+    addEntry('manual', 'Stopped listening');
+}
 
-    function addEntry(type, text, editable) {
-        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const entry = { type, text, time, ts: Date.now(), editable: !!editable };
-        state.entries.unshift(entry);
-        renderEntry(entry, true);
-        while (state.entries.length > 200) { state.entries.pop(); removeLastEntry(); }
-    }
+async function acquireWakeLock() {
+    if ('wakeLock' in navigator) { try { state.wakeLock = await navigator.wakeLock.request('screen'); return; } catch(err) {} }
+    try { await els.noSleep.play(); } catch(e) {}
+}
+function releaseWakeLock() {
+    if (state.wakeLock) { state.wakeLock.release().catch(function(){}); state.wakeLock = null; }
+    try { els.noSleep.pause(); } catch(e) {}
+}
 
-    function renderEntry(entry, prepend) {
-        const div = document.createElement('div');
-        div.className = 'entry';
-        div.dataset.ts = entry.ts;
-        const cls = entry.type === 'voice' ? 'entry-voice' : entry.type === 'manual' ? 'entry-manual' : '';
-        const label = entry.type === 'voice' ? 'VOICE' : entry.type === 'manual' ? 'NOTE' : '';
-        if (entry.editable) {
-            div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><textarea rows="1" oninput="autoResize(this); updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
-        } else {
-            div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><div class="entry-text">' + escapeHtml(entry.text) + '</div>';
-        }
-        const header = els.notes.querySelector('.notes-header');
-        if (prepend && header && header.nextSibling) els.notes.insertBefore(div, header.nextSibling);
-        else els.notes.appendChild(div);
-        if (entry.editable) {
-            const ta = div.querySelector('textarea');
-            autoResize(ta);
-            ta.focus();
-        }
-    }
+function updateStatus(type, text) { els.status.className = 'status ' + type; els.status.textContent = text; }
+function updateMainBtn() { if (state.isListening) { els.mainBtn.className='main-btn stop'; els.btnIcon.textContent='⏹'; els.btnText.textContent='Stop Recording'; } else { els.mainBtn.className='main-btn start'; els.btnIcon.textContent='▶'; els.btnText.textContent='Start Recording'; } }
+function showToast(msg, type) { els.toast.textContent = msg; els.toast.className = 'toast show ' + (type||''); setTimeout(function() { els.toast.classList.remove('show'); }, 3000); }
 
-    function autoResize(ta) {
-        ta.style.height = 'auto';
-        ta.style.height = ta.scrollHeight + 'px';
-    }
+function loadSettings() { try { const s = localStorage.getItem('speaknote_settings'); if (s) Object.assign(state.settings, JSON.parse(s)); } catch(e){} setLang(state.settings.lang); }
+function saveSettings() { try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); } catch(e){} }
 
-    function updateEntry(ta) {
-        const ts = parseInt(ta.parentElement.dataset.ts);
-        const e = state.entries.find(x => x.ts === ts);
-        if (e) e.text = ta.value;
-    }
+function setupInstall() {
+    window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
+    window.addEventListener('appinstalled', function() { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); showToast('SpeakNote installed!', 'success'); });
+}
+async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show'); deferredPrompt = null; }
 
-    function removeLastEntry() {
-        const entries = els.notes.querySelectorAll('.entry');
-        if (entries.length) entries[entries.length - 1].remove();
-    }
-
-    function escapeHtml(t) {
-        const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
-    }
-
-    function addManualNote() {
-        addEntry('manual', '', true);
-    }
-
-    function undoLast() {
-        if (state.entries.length === 0) { showToast('Nothing to undo', 'error'); return; }
-        state.entries.shift();
-        const first = els.notes.querySelector('.entry');
-        if (first) first.remove();
-        showToast('Undone', 'success');
-    }
-
-    function clearNotes() {
-        state.entries = [];
-        const header = els.notes.querySelector('.notes-header');
-        els.notes.innerHTML = ''; if (header) els.notes.appendChild(header);
-        showToast('Notes cleared', 'success');
-    }
-
-    // ==================== EXPORT ====================
-    function buildText() {
-        const lines = state.entries.slice().reverse().map(e => {
-            const label = e.type === 'voice' ? '[VOICE]' : e.type === 'manual' ? '[NOTE]' : '';
-            return e.time + '  ' + label + '
-    ' + e.text.replace(/\n/g, '\n    ');
-        });
-        return lines.join('\n\n');
-    }
-
-    function copyToClipboard() {
-        if (state.entries.length === 0) { showToast('No notes to copy', 'error'); return; }
-        const text = buildText();
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('Copied to clipboard!', 'success');
-        }).catch(() => {
-            showToast('Copy failed', 'error');
-        });
-    }
-
-    function exportText() {
-        if (state.entries.length === 0) { showToast('No notes to export', 'error'); return; }
-        const text = buildText();
-        const blob = new Blob([text], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0,10) + '.txt';
-        a.click(); URL.revokeObjectURL(url);
-        showToast('Exported!', 'success');
-    }
-
-    // ==================== VOICE ====================
-    function processCommand(t) {
-        const now = Date.now();
-        if (now - state.lastCmdTime < 400) return;
-        state.lastCmdTime = now;
-        state.consecutiveErrors = 0;
-        if (t.length < 1) return;
-        if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('manual', 'Stopped by voice'); }
-        else { addEntry('voice', t); }
-    }
-
-    function setupRecog() {
-        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SR) { showToast('Speech recognition not supported', 'error'); return false; }
-        state.recognition = new SR();
-        state.recognition.continuous = true;
-        state.recognition.interimResults = false;
-        state.recognition.lang = state.settings.lang;
-        state.recognition.onstart = () => {
-            state.isListening = true; state.consecutiveErrors = 0;
-            updateStatus('listening', 'Listening...'); updateMainBtn();
-            addEntry('manual', '🎙️ Microphone active (' + LANG_NAMES[state.settings.lang] + ')');
-        };
-        state.recognition.onresult = (e) => {
-            const r = e.results[e.results.length-1];
-            if (r.isFinal) processCommand(r[0].transcript.trim());
-        };
-        state.recognition.onerror = (e) => {
-            state.consecutiveErrors++;
-            if (e.error === 'no-speech') addEntry('manual', 'No speech detected');
-            else if (e.error === 'not-allowed') { updateStatus('error', 'Mic denied'); showToast('Allow microphone access', 'error'); stopListening(); return; }
-            else { updateStatus('error', e.error); addEntry('manual', 'Error: ' + e.error); }
-            if (state.settings.autorestart && state.isListening && state.consecutiveErrors < 5) {
-                setTimeout(() => { if (state.isListening) safeStart(); }, 500);
-            } else if (state.consecutiveErrors >= 5) { updateStatus('error', 'Too many errors'); stopListening(); }
-        };
-        state.recognition.onend = () => { if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 100); };
-        return true;
-    }
-
-    function safeStart() { if (!state.recognition) return; try { state.recognition.start(); } catch(e) { if (e.name !== 'InvalidStateError') console.error(e); } }
-
-    async function toggleListening() {
-        if (state.isListening) stopListening();
-        else {
-            if (!state.recognition) { if (!setupRecog()) return; }
-            try { state.recognition.lang = state.settings.lang; state.recognition.start(); await acquireWakeLock(); }
-            catch(e) { showToast('Could not start: '+e.message, 'error'); }
-        }
-    }
-
-    function stopListening() {
-        state.isListening = false; state.consecutiveErrors = 0;
-        if (state.recognition) try { state.recognition.stop(); } catch(e){}
-        releaseWakeLock();
-        updateStatus('idle', 'Idle'); updateMainBtn();
-        addEntry('manual', 'Stopped listening');
-    }
-
-    async function acquireWakeLock() {
-        if ('wakeLock' in navigator) { try { state.wakeLock = await navigator.wakeLock.request('screen'); return; } catch(err) {} }
-        try { await els.noSleep.play(); } catch(e) {}
-    }
-    function releaseWakeLock() {
-        if (state.wakeLock) { state.wakeLock.release().catch(()=>{}); state.wakeLock = null; }
-        try { els.noSleep.pause(); } catch(e) {}
-    }
-
-    function updateStatus(type, text) { els.status.className = 'status ' + type; els.status.textContent = text; }
-    function updateMainBtn() { if (state.isListening) { els.mainBtn.className='main-btn stop'; els.btnIcon.textContent='⏹'; els.btnText.textContent='Stop Recording'; } else { els.mainBtn.className='main-btn start'; els.btnIcon.textContent='▶'; els.btnText.textContent='Start Recording'; } }
-    function showToast(msg, type) { els.toast.textContent = msg; els.toast.className = 'toast show ' + (type||''); setTimeout(() => els.toast.classList.remove('show'), 3000); }
-
-    function loadSettings() { try { const s = localStorage.getItem('speaknote_settings'); if (s) Object.assign(state.settings, JSON.parse(s)); } catch(e){} setLang(state.settings.lang); }
-    function saveSettings() { try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); } catch(e){} }
-
-    function setupInstall() {
-        window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
-        window.addEventListener('appinstalled', () => { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); showToast('SpeakNote installed!', 'success'); });
-    }
-    async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show'); deferredPrompt = null; }
-
-    init();
-    </script>
+init();
+</script>
 </body>
 </html>
