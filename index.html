@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f0f23">
+    <title>SpeakNote v1.0</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <style>
+        :root {
+            --bg: #0f0f23; --bg2: #1a1a2e; --card: #16213e; --accent: #00d4aa;
+            --warn: #ffd93d; --danger: #ff6b6b; --info: #74b9ff; --text: #fff; --muted: #a0a0b0;
+            --border: #2a2a40;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+        .header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border-bottom: 1px solid var(--border); }
+        .header h1 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        .version { font-size: 11px; color: var(--accent); font-weight: 700; background: rgba(0,212,170,0.1); padding: 2px 8px; border-radius: 12px; }
+        .status { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .status.idle { background: #666680; color: var(--bg); }
+        .status.listening { background: var(--accent); color: var(--bg); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .lang-bar { display: flex; gap: 8px; padding: 8px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .lang-bar::-webkit-scrollbar { display: none; }
+        .lang-btn { padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .lang-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+        .controls { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+        .main-btn { width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .main-btn.start { background: linear-gradient(135deg, var(--accent), #00b894); color: var(--bg); }
+        .main-btn.stop { background: linear-gradient(135deg, var(--danger), #ee5a5a); color: #fff; }
+        .secondary { display: flex; gap: 8px; }
+        .sec-btn { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+        .sec-btn:active { background: var(--border); color: var(--text); }
+        .notes { flex: 1; background: var(--bg2); border-top: 1px solid var(--border); padding: 12px 16px; overflow-y: auto; min-height: 100px; }
+        .notes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .notes-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+        .notes-actions { display: flex; gap: 6px; }
+        .notes-actions button { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+        .notes-actions button:active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+        .entry { padding: 10px 14px; background: var(--card); border-radius: 10px; margin-bottom: 8px; }
+        .entry-time { color: #666680; font-size: 10px; display: block; margin-bottom: 4px; }
+        .entry-voice { color: var(--accent); font-weight: 600; }
+        .entry-manual { color: var(--warn); font-weight: 600; }
+        .entry-text { font-size: 14px; line-height: 1.5; color: var(--text); word-break: break-word; }
+        .entry textarea { width: 100%; background: transparent; border: none; color: var(--text); font-size: 14px; line-height: 1.5; resize: none; outline: none; font-family: inherit; }
+        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--card); color: var(--text); padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid var(--border); opacity: 0; transition: all 0.3s; z-index: 2000; pointer-events: none; max-width: 90vw; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .install-banner { position: fixed; bottom: 0; left: 0; right: 0; background: var(--accent); color: var(--bg); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 3000; transform: translateY(100%); transition: transform 0.3s; }
+        .install-banner.show { transform: translateY(0); }
+        .install-banner button { background: var(--bg); color: var(--accent); border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        #no-sleep { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎙️ SpeakNote <span class="version">v1.0</span></h1>
+        <div class="status idle" id="status">Idle</div>
+    </div>
+    <div class="lang-bar" id="lang-bar">
+        <button class="lang-btn active" data-lang="en-US" onclick="setLang('en-US')">🇺🇸 EN</button>
+        <button class="lang-btn" data-lang="es-ES" onclick="setLang('es-ES')">🇪🇸 ES</button>
+        <button class="lang-btn" data-lang="fr-FR" onclick="setLang('fr-FR')">🇫🇷 FR</button>
+        <button class="lang-btn" data-lang="de-DE" onclick="setLang('de-DE')">🇩🇪 DE</button>
+        <button class="lang-btn" data-lang="it-IT" onclick="setLang('it-IT')">🇮🇹 IT</button>
+        <button class="lang-btn" data-lang="pt-BR" onclick="setLang('pt-BR')">🇧🇷 PT</button>
+        <button class="lang-btn" data-lang="ja-JP" onclick="setLang('ja-JP')">🇯🇵 JP</button>
+        <button class="lang-btn" data-lang="ko-KR" onclick="setLang('ko-KR')">🇰🇷 KR</button>
+        <button class="lang-btn" data-lang="zh-CN" onclick="setLang('zh-CN')">🇨🇳 CN</button>
+        <button class="lang-btn" data-lang="nl-NL" onclick="setLang('nl-NL')">🇳🇱 NL</button>
+    </div>
+    <div class="controls">
+        <button class="main-btn start" id="main-btn" onclick="toggleListening()">
+            <span id="btn-icon">▶</span><span id="btn-text">Start Recording</span>
+        </button>
+        <div class="secondary">
+            <button class="sec-btn" onclick="addManualNote()">✎ New Note</button>
+            <button class="sec-btn" onclick="undoLast()">↩ Undo</button>
+            <button class="sec-btn" onclick="copyToClipboard()">📋 Copy All</button>
+            <button class="sec-btn" onclick="exportText()">⬇ Export</button>
+        </div>
+    </div>
+    <div class="notes" id="notes">
+        <div class="notes-header">
+            <span class="notes-title">📝 Notes</span>
+            <span class="notes-actions">
+                <button onclick="clearNotes()">Clear</button>
+            </span>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="install-banner" id="install-banner"><span>📲 Install SpeakNote for offline use</span><button onclick="installPWA()">Install</button></div>
+    <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
+    <script>
+    const APP_VERSION = '1.0';
+    const APP_BUILD = '2026-05-12-1';
+
+    const LANG_NAMES = {
+        'en-US': 'English', 'es-ES': 'Español', 'fr-FR': 'Français', 'de-DE': 'Deutsch',
+        'it-IT': 'Italiano', 'pt-BR': 'Português', 'ja-JP': '日本語', 'ko-KR': '한국어',
+        'zh-CN': '中文', 'nl-NL': 'Nederlands'
+    };
+
+    let state = {
+        entries: [], isListening: false, recognition: null, wakeLock: null,
+        settings: { autorestart: true, lang: 'en-US' },
+        consecutiveErrors: 0, lastCmdTime: 0
+    };
+    let deferredPrompt = null;
+
+    const els = {
+        status: document.getElementById('status'), mainBtn: document.getElementById('main-btn'),
+        btnIcon: document.getElementById('btn-icon'), btnText: document.getElementById('btn-text'),
+        notes: document.getElementById('notes'), toast: document.getElementById('toast'),
+        noSleep: document.getElementById('no-sleep')
+    };
+
+    function init() {
+        loadSettings();
+        setupInstall();
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+    }
+
+    function setLang(lang) {
+        state.settings.lang = lang;
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+        if (state.recognition) {
+            state.recognition.lang = lang;
+            if (state.isListening) { stopListening(); setTimeout(toggleListening, 300); }
+        }
+        saveSettings();
+        showToast('Language: ' + LANG_NAMES[lang], 'success');
+    }
+
+    function addEntry(type, text, editable) {
+        const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const entry = { type, text, time, ts: Date.now(), editable: !!editable };
+        state.entries.unshift(entry);
+        renderEntry(entry, true);
+        while (state.entries.length > 200) { state.entries.pop(); removeLastEntry(); }
+    }
+
+    function renderEntry(entry, prepend) {
+        const div = document.createElement('div');
+        div.className = 'entry';
+        div.dataset.ts = entry.ts;
+        const cls = entry.type === 'voice' ? 'entry-voice' : entry.type === 'manual' ? 'entry-manual' : '';
+        const label = entry.type === 'voice' ? 'VOICE' : entry.type === 'manual' ? 'NOTE' : '';
+        if (entry.editable) {
+            div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><textarea rows="1" oninput="autoResize(this); updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
+        } else {
+            div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><div class="entry-text">' + escapeHtml(entry.text) + '</div>';
+        }
+        const header = els.notes.querySelector('.notes-header');
+        if (prepend && header && header.nextSibling) els.notes.insertBefore(div, header.nextSibling);
+        else els.notes.appendChild(div);
+        if (entry.editable) {
+            const ta = div.querySelector('textarea');
+            autoResize(ta);
+            ta.focus();
+        }
+    }
+
+    function autoResize(ta) {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+    }
+
+    function updateEntry(ta) {
+        const ts = parseInt(ta.parentElement.dataset.ts);
+        const e = state.entries.find(x => x.ts === ts);
+        if (e) e.text = ta.value;
+    }
+
+    function removeLastEntry() {
+        const entries = els.notes.querySelectorAll('.entry');
+        if (entries.length) entries[entries.length - 1].remove();
+    }
+
+    function escapeHtml(t) {
+        const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
+    }
+
+    function addManualNote() {
+        addEntry('manual', '', true);
+    }
+
+    function undoLast() {
+        if (state.entries.length === 0) { showToast('Nothing to undo', 'error'); return; }
+        state.entries.shift();
+        const first = els.notes.querySelector('.entry');
+        if (first) first.remove();
+        showToast('Undone', 'success');
+    }
+
+    function clearNotes() {
+        state.entries = [];
+        const header = els.notes.querySelector('.notes-header');
+        els.notes.innerHTML = ''; if (header) els.notes.appendChild(header);
+        showToast('Notes cleared', 'success');
+    }
+
+    // ==================== EXPORT ====================
+    function buildText() {
+        const lines = state.entries.slice().reverse().map(e => {
+            const label = e.type === 'voice' ? '[VOICE]' : e.type === 'manual' ? '[NOTE]' : '';
+            return e.time + '  ' + label + '
+    ' + e.text.replace(/\n/g, '\n    ');
+        });
+        return lines.join('\n\n');
+    }
+
+    function copyToClipboard() {
+        if (state.entries.length === 0) { showToast('No notes to copy', 'error'); return; }
+        const text = buildText();
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Copied to clipboard!', 'success');
+        }).catch(() => {
+            showToast('Copy failed', 'error');
+        });
+    }
+
+    function exportText() {
+        if (state.entries.length === 0) { showToast('No notes to export', 'error'); return; }
+        const text = buildText();
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0,10) + '.txt';
+        a.click(); URL.revokeObjectURL(url);
+        showToast('Exported!', 'success');
+    }
+
+    // ==================== VOICE ====================
+    function processCommand(t) {
+        const now = Date.now();
+        if (now - state.lastCmdTime < 400) return;
+        state.lastCmdTime = now;
+        state.consecutiveErrors = 0;
+        if (t.length < 1) return;
+        if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('manual', 'Stopped by voice'); }
+        else { addEntry('voice', t); }
+    }
+
+    function setupRecog() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { showToast('Speech recognition not supported', 'error'); return false; }
+        state.recognition = new SR();
+        state.recognition.continuous = true;
+        state.recognition.interimResults = false;
+        state.recognition.lang = state.settings.lang;
+        state.recognition.onstart = () => {
+            state.isListening = true; state.consecutiveErrors = 0;
+            updateStatus('listening', 'Listening...'); updateMainBtn();
+            addEntry('manual', '🎙️ Microphone active (' + LANG_NAMES[state.settings.lang] + ')');
+        };
+        state.recognition.onresult = (e) => {
+            const r = e.results[e.results.length-1];
+            if (r.isFinal) processCommand(r[0].transcript.trim());
+        };
+        state.recognition.onerror = (e) => {
+            state.consecutiveErrors++;
+            if (e.error === 'no-speech') addEntry('manual', 'No speech detected');
+            else if (e.error === 'not-allowed') { updateStatus('error', 'Mic denied'); showToast('Allow microphone access', 'error'); stopListening(); return; }
+            else { updateStatus('error', e.error); addEntry('manual', 'Error: ' + e.error); }
+            if (state.settings.autorestart && state.isListening && state.consecutiveErrors < 5) {
+                setTimeout(() => { if (state.isListening) safeStart(); }, 500);
+            } else if (state.consecutiveErrors >= 5) { updateStatus('error', 'Too many errors'); stopListening(); }
+        };
+        state.recognition.onend = () => { if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 100); };
+        return true;
+    }
+
+    function safeStart() { if (!state.recognition) return; try { state.recognition.start(); } catch(e) { if (e.name !== 'InvalidStateError') console.error(e); } }
+
+    async function toggleListening() {
+        if (state.isListening) stopListening();
+        else {
+            if (!state.recognition) { if (!setupRecog()) return; }
+            try { state.recognition.lang = state.settings.lang; state.recognition.start(); await acquireWakeLock(); }
+            catch(e) { showToast('Could not start: '+e.message, 'error'); }
+        }
+    }
+
+    function stopListening() {
+        state.isListening = false; state.consecutiveErrors = 0;
+        if (state.recognition) try { state.recognition.stop(); } catch(e){}
+        releaseWakeLock();
+        updateStatus('idle', 'Idle'); updateMainBtn();
+        addEntry('manual', 'Stopped listening');
+    }
+
+    async function acquireWakeLock() {
+        if ('wakeLock' in navigator) { try { state.wakeLock = await navigator.wakeLock.request('screen'); return; } catch(err) {} }
+        try { await els.noSleep.play(); } catch(e) {}
+    }
+    function releaseWakeLock() {
+        if (state.wakeLock) { state.wakeLock.release().catch(()=>{}); state.wakeLock = null; }
+        try { els.noSleep.pause(); } catch(e) {}
+    }
+
+    function updateStatus(type, text) { els.status.className = 'status ' + type; els.status.textContent = text; }
+    function updateMainBtn() { if (state.isListening) { els.mainBtn.className='main-btn stop'; els.btnIcon.textContent='⏹'; els.btnText.textContent='Stop Recording'; } else { els.mainBtn.className='main-btn start'; els.btnIcon.textContent='▶'; els.btnText.textContent='Start Recording'; } }
+    function showToast(msg, type) { els.toast.textContent = msg; els.toast.className = 'toast show ' + (type||''); setTimeout(() => els.toast.classList.remove('show'), 3000); }
+
+    function loadSettings() { try { const s = localStorage.getItem('speaknote_settings'); if (s) Object.assign(state.settings, JSON.parse(s)); } catch(e){} setLang(state.settings.lang); }
+    function saveSettings() { try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); } catch(e){} }
+
+    function setupInstall() {
+        window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
+        window.addEventListener('appinstalled', () => { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); showToast('SpeakNote installed!', 'success'); });
+    }
+    async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show'); deferredPrompt = null; }
+
+    init();
+    </script>
+</body>
+</html>
