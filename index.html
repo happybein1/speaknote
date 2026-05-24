@@ -5,59 +5,320 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
     <title>SpeakNote v1.0</title>
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
+    <meta property="og:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="SpeakNote app open on a phone, being used by someone speaking into it">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SpeakNote — Voice Notes, Instantly">
+    <meta name="twitter:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export.">
+    <meta name="twitter:image" content="og-image.png">
+
+    <!-- General -->
+    <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
+
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <!-- Inline SVG favicon — no external file needed -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f0f23'/%3E%3Crect x='24' y='8' width='16' height='26' rx='8' fill='%2300d4aa'/%3E%3Cpath d='M16 30c0 8.837 7.163 16 16 16s16-7.163 16-16' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round' fill='none'/%3E%3Cline x1='32' y1='46' x2='32' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='24' y1='54' x2='40' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0f0f23; --bg2: #1a1a2e; --card: #16213e; --accent: #00d4aa;
-            --warn: #ffd93d; --danger: #ff6b6b; --info: #74b9ff; --text: #fff; --muted: #a0a0b0;
-            --border: #2a2a40;
+            --bg: #0c0c1d; --bg2: #13132a; --card: #1a1a35; --card2: #20203e;
+            --accent: #00d4aa; --accent2: #00b894; --accent-glow: rgba(0,212,170,0.18);
+            --warn: #ffd93d; --danger: #ff6b6b; --info: #74b9ff; --text: #e8e8f0; --muted: #7070a0;
+            --border: #28285a; --border2: #32326a;
+            --radius: 12px; --radius-sm: 8px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
-        .header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border-bottom: 1px solid var(--border); }
-        .header h1 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
-        .version { font-size: 11px; color: var(--accent); font-weight: 700; background: rgba(0,212,170,0.1); padding: 2px 8px; border-radius: 12px; }
-        .status { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-        .status.idle { background: #666680; color: var(--bg); }
-        .status.listening { background: var(--accent); color: var(--bg); animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-        .lang-bar { display: flex; gap: 8px; padding: 8px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            /* Subtle noise texture for depth */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+        }
+
+        /* ── Header ── */
+        .header {
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(180deg, #16163a 0%, var(--bg2) 100%);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .logo-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+            box-shadow: 0 0 12px var(--accent-glow);
+            flex-shrink: 0;
+        }
+        .header h1 {
+            font-family: 'DM Mono', monospace;
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: -0.3px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .version {
+            font-size: 10px; color: var(--accent); font-weight: 500;
+            background: var(--accent-glow); padding: 2px 7px;
+            border-radius: 20px; border: 1px solid rgba(0,212,170,0.25);
+            font-family: 'DM Mono', monospace;
+        }
+        .status {
+            padding: 5px 13px; border-radius: 20px; font-size: 11px;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;
+            font-family: 'DM Mono', monospace;
+            transition: all 0.3s ease;
+        }
+        .status.idle { background: var(--card2); color: var(--muted); border: 1px solid var(--border2); }
+        .status.listening {
+            background: var(--accent); color: var(--bg);
+            box-shadow: 0 0 16px var(--accent-glow);
+            animation: statusPulse 2s infinite;
+        }
+        .status.error { background: var(--danger); color: #fff; }
+        @keyframes statusPulse { 0%,100%{opacity:1; box-shadow: 0 0 16px var(--accent-glow);} 50%{opacity:0.75; box-shadow: 0 0 28px var(--accent-glow);} }
+
+        /* ── Language Bar ── */
+        .lang-bar {
+            display: flex; gap: 6px; padding: 9px 16px;
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
         .lang-bar::-webkit-scrollbar { display: none; }
-        .lang-btn { padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .lang-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-        .controls { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
-        .main-btn { width: 100%; padding: 16px; border-radius: 14px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .main-btn.start { background: linear-gradient(135deg, var(--accent), #00b894); color: var(--bg); }
-        .main-btn.stop { background: linear-gradient(135deg, var(--danger), #ee5a5a); color: #fff; }
-        .secondary { display: flex; gap: 8px; }
-        .sec-btn { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
-        .sec-btn:active { background: var(--border); color: var(--text); }
-        .notes { flex: 1; background: var(--bg2); border-top: 1px solid var(--border); padding: 12px 16px; overflow-y: auto; min-height: 100px; }
-        .notes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .notes-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+        .lang-btn {
+            padding: 4px 11px; border-radius: 20px;
+            border: 1px solid var(--border); background: transparent;
+            color: var(--muted); font-size: 11px; font-weight: 600;
+            cursor: pointer; white-space: nowrap;
+            transition: all 0.2s ease;
+            font-family: 'DM Mono', monospace;
+        }
+        .lang-btn:hover { border-color: var(--border2); color: var(--text); background: var(--card); }
+        .lang-btn.active {
+            background: var(--accent); color: var(--bg);
+            border-color: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        /* ── Controls ── */
+        .controls {
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .main-btn {
+            width: 100%; padding: 16px; border-radius: var(--radius);
+            border: none; font-size: 15px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            text-transform: uppercase; letter-spacing: 1px;
+            font-family: 'DM Mono', monospace;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .main-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0);
+            transition: background 0.15s;
+        }
+        .main-btn:active::after { background: rgba(255,255,255,0.1); }
+        .main-btn.start {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+            color: var(--bg);
+            box-shadow: 0 4px 24px rgba(0,212,170,0.25);
+        }
+        .main-btn.start:hover { box-shadow: 0 4px 32px rgba(0,212,170,0.4); transform: translateY(-1px); }
+        .main-btn.stop {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5252 100%);
+            color: #fff;
+            box-shadow: 0 4px 24px rgba(255,107,107,0.25);
+        }
+        .main-btn.stop:hover { box-shadow: 0 4px 32px rgba(255,107,107,0.4); transform: translateY(-1px); }
+        .btn-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: currentColor;
+            animation: none;
+        }
+        .main-btn.stop .btn-dot { animation: recDot 1s infinite; }
+        @keyframes recDot { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+        .secondary { display: flex; gap: 6px; }
+        .sec-btn {
+            flex: 1; padding: 10px 4px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--card); color: var(--muted);
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            font-family: 'DM Mono', monospace;
+            transition: all 0.18s ease;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+        }
+        .sec-btn .sec-icon { font-size: 15px; }
+        .sec-btn:hover { border-color: var(--border2); color: var(--text); background: var(--card2); }
+        .sec-btn:active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); transform: scale(0.97); }
+
+        /* ── Notes Area ── */
+        .notes {
+            flex: 1; background: var(--bg);
+            padding: 14px 16px; overflow-y: auto; min-height: 100px;
+        }
+        .notes-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+        }
+        .notes-title {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;
+        }
+        .note-count {
+            font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted);
+            background: var(--card); padding: 2px 8px; border-radius: 20px;
+            border: 1px solid var(--border);
+        }
         .notes-actions { display: flex; gap: 6px; }
-        .notes-actions button { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
-        .notes-actions button:active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-        .entry { padding: 10px 14px; background: var(--card); border-radius: 10px; margin-bottom: 8px; }
-        .entry-time { color: #666680; font-size: 10px; display: block; margin-bottom: 4px; }
-        .entry-voice { color: var(--accent); font-weight: 600; }
-        .entry-manual { color: var(--warn); font-weight: 600; }
-        .entry-text { font-size: 14px; line-height: 1.5; color: var(--text); word-break: break-word; }
-        .entry textarea { width: 100%; background: transparent; border: none; color: var(--text); font-size: 14px; line-height: 1.5; resize: none; outline: none; font-family: inherit; }
-        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--card); color: var(--text); padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid var(--border); opacity: 0; transition: all 0.3s; z-index: 2000; pointer-events: none; max-width: 90vw; }
+        .notes-actions button {
+            padding: 4px 10px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--card); color: var(--muted);
+            font-size: 11px; font-weight: 600; cursor: pointer;
+            font-family: 'DM Mono', monospace;
+            transition: all 0.18s;
+        }
+        .notes-actions button:hover { border-color: var(--danger); color: var(--danger); }
+        .notes-actions button:active { background: rgba(255,107,107,0.1); }
+
+        /* ── Entries ── */
+        .entry {
+            padding: 10px 14px; background: var(--card); border-radius: var(--radius);
+            margin-bottom: 7px; border: 1px solid var(--border);
+            transition: border-color 0.2s;
+            animation: entryIn 0.25s ease-out both;
+        }
+        @keyframes entryIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+        .entry:hover { border-color: var(--border2); }
+        .entry-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        .entry-time { color: var(--muted); font-size: 10px; font-family: 'DM Mono', monospace; }
+        .entry-badge {
+            font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: 0.8px; font-family: 'DM Mono', monospace;
+        }
+        .badge-voice { background: rgba(0,212,170,0.15); color: var(--accent); border: 1px solid rgba(0,212,170,0.25); }
+        .badge-note { background: rgba(255,217,61,0.12); color: var(--warn); border: 1px solid rgba(255,217,61,0.2); }
+        .entry-text { font-size: 14px; line-height: 1.6; color: var(--text); word-break: break-word; }
+        .entry textarea {
+            width: 100%; background: transparent; border: none; color: var(--text);
+            font-size: 14px; line-height: 1.6; resize: none; outline: none;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .entry.voice-entry { border-left: 2px solid var(--accent); }
+        .entry.manual-entry { border-left: 2px solid rgba(255,217,61,0.4); }
+
+        /* Empty state */
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 40px 20px; color: var(--muted); text-align: center; gap: 10px;
+        }
+        .empty-icon { font-size: 36px; opacity: 0.4; }
+        .empty-text { font-size: 13px; font-family: 'DM Mono', monospace; opacity: 0.6; }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; bottom: 110px; left: 50%;
+            transform: translateX(-50%) translateY(16px);
+            background: var(--card2); color: var(--text);
+            padding: 11px 22px; border-radius: 22px;
+            font-size: 13px; font-weight: 600;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 1px solid var(--border2);
+            opacity: 0; transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 2000; pointer-events: none; max-width: 90vw;
+            font-family: 'DM Mono', monospace;
+            display: flex; align-items: center; gap: 8px;
+        }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-        .install-banner { position: fixed; bottom: 0; left: 0; right: 0; background: var(--accent); color: var(--bg); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 3000; transform: translateY(100%); transition: transform 0.3s; }
+        .toast.success::before { content: '✓'; color: var(--accent); }
+        .toast.error::before { content: '✕'; color: var(--danger); }
+
+        /* ── Install Banner ── */
+        .install-banner {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: var(--bg); padding: 14px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 3000; transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.34, 1.36, 0.64, 1);
+        }
         .install-banner.show { transform: translateY(0); }
-        .install-banner button { background: var(--bg); color: var(--accent); border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+        .install-banner-left { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+        .install-banner button {
+            background: var(--bg); color: var(--accent); border: none;
+            padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer;
+            font-family: 'DM Mono', monospace; font-size: 12px;
+        }
+        .install-dismiss {
+            background: transparent !important; color: rgba(0,0,0,0.4) !important;
+            padding: 4px 8px !important; font-size: 18px !important;
+        }
+
+        /* Waveform animation shown when listening */
+        .waveform { display: none; align-items: center; gap: 3px; height: 18px; }
+        .waveform.active { display: flex; }
+        .waveform span {
+            display: block; width: 3px; border-radius: 2px;
+            background: var(--accent); height: 4px;
+        }
+        .waveform span:nth-child(1) { animation: wave 1s ease-in-out infinite 0.0s; }
+        .waveform span:nth-child(2) { animation: wave 1s ease-in-out infinite 0.15s; }
+        .waveform span:nth-child(3) { animation: wave 1s ease-in-out infinite 0.3s; }
+        .waveform span:nth-child(4) { animation: wave 1s ease-in-out infinite 0.45s; }
+        .waveform span:nth-child(5) { animation: wave 1s ease-in-out infinite 0.6s; }
+        @keyframes wave { 0%,100%{height:4px} 50%{height:16px} }
+
         #no-sleep { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+        /* Scrollbar */
+        .notes::-webkit-scrollbar { width: 4px; }
+        .notes::-webkit-scrollbar-track { background: transparent; }
+        .notes::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🎙️ SpeakNote <span class="version">v1.0</span></h1>
+        <div class="header-left">
+            <div class="logo-icon">🎙️</div>
+            <h1>SpeakNote <span class="version">v1.0</span></h1>
+        </div>
         <div class="status idle" id="status">Idle</div>
     </div>
+
     <div class="lang-bar" id="lang-bar">
         <button class="lang-btn active" data-lang="en-US" onclick="setLang('en-US')">🇺🇸 EN</button>
         <button class="lang-btn" data-lang="es-ES" onclick="setLang('es-ES')">🇪🇸 ES</button>
@@ -70,28 +331,54 @@
         <button class="lang-btn" data-lang="zh-CN" onclick="setLang('zh-CN')">🇨🇳 CN</button>
         <button class="lang-btn" data-lang="nl-NL" onclick="setLang('nl-NL')">🇳🇱 NL</button>
     </div>
+
     <div class="controls">
         <button class="main-btn start" id="main-btn" onclick="toggleListening()">
-            <span id="btn-icon">▶</span><span id="btn-text">Start Recording</span>
+            <span class="waveform" id="waveform"><span></span><span></span><span></span><span></span><span></span></span>
+            <span id="btn-icon">▶</span>
+            <span id="btn-text">Start Recording</span>
         </button>
         <div class="secondary">
-            <button class="sec-btn" onclick="addManualNote()">✎ New Note</button>
-            <button class="sec-btn" onclick="undoLast()">↩ Undo</button>
-            <button class="sec-btn" onclick="copyToClipboard()">📋 Copy All</button>
-            <button class="sec-btn" onclick="exportText()">⬇ Export</button>
+            <button class="sec-btn" onclick="addManualNote()">
+                <span class="sec-icon">✎</span><span>Note</span>
+            </button>
+            <button class="sec-btn" onclick="undoLast()">
+                <span class="sec-icon">↩</span><span>Undo</span>
+            </button>
+            <button class="sec-btn" onclick="copyToClipboard()">
+                <span class="sec-icon">📋</span><span>Copy</span>
+            </button>
+            <button class="sec-btn" onclick="exportText()">
+                <span class="sec-icon">⬇</span><span>Export</span>
+            </button>
         </div>
     </div>
+
     <div class="notes" id="notes">
         <div class="notes-header">
-            <span class="notes-title">📝 Notes</span>
-            <span class="notes-actions">
-                <button onclick="clearNotes()">Clear</button>
-            </span>
+            <span class="notes-title">📝 Session Notes</span>
+            <div style="display:flex;align-items:center;gap:8px">
+                <span class="note-count" id="note-count">0 entries</span>
+                <span class="notes-actions"><button onclick="clearNotes()">Clear all</button></span>
+            </div>
+        </div>
+        <div class="empty-state" id="empty-state">
+            <div class="empty-icon">🎙️</div>
+            <div class="empty-text">Press Start Recording to begin</div>
         </div>
     </div>
+
     <div class="toast" id="toast"></div>
-    <div class="install-banner" id="install-banner"><span>📲 Install SpeakNote for offline use</span><button onclick="installPWA()">Install</button></div>
+    <div class="install-banner" id="install-banner">
+        <div class="install-banner-left">📲 Install SpeakNote for offline use</div>
+        <div style="display:flex;gap:6px;align-items:center">
+            <button onclick="installPWA()">Install</button>
+            <button class="install-dismiss" onclick="document.getElementById('install-banner').classList.remove('show')">✕</button>
+        </div>
+    </div>
+
     <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
+
     <script>
 const APP_VERSION = '1.0';
 const APP_BUILD = '2026-05-12-1';
@@ -110,10 +397,16 @@ let state = {
 let deferredPrompt = null;
 
 const els = {
-    status: document.getElementById('status'), mainBtn: document.getElementById('main-btn'),
-    btnIcon: document.getElementById('btn-icon'), btnText: document.getElementById('btn-text'),
-    notes: document.getElementById('notes'), toast: document.getElementById('toast'),
-    noSleep: document.getElementById('no-sleep')
+    status: document.getElementById('status'),
+    mainBtn: document.getElementById('main-btn'),
+    btnIcon: document.getElementById('btn-icon'),
+    btnText: document.getElementById('btn-text'),
+    notes: document.getElementById('notes'),
+    toast: document.getElementById('toast'),
+    noSleep: document.getElementById('no-sleep'),
+    waveform: document.getElementById('waveform'),
+    noteCount: document.getElementById('note-count'),
+    emptyState: document.getElementById('empty-state'),
 };
 
 function init() {
@@ -133,28 +426,42 @@ function setLang(lang) {
     showToast('Language: ' + LANG_NAMES[lang], 'success');
 }
 
+function updateEntryCount() {
+    const n = state.entries.length;
+    els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
+    els.emptyState.style.display = n === 0 ? 'flex' : 'none';
+}
+
 function addEntry(type, text, editable) {
     const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const entry = { type: type, text: text, time: time, ts: Date.now(), editable: !!editable };
     state.entries.unshift(entry);
     renderEntry(entry, true);
     while (state.entries.length > 200) { state.entries.pop(); removeLastEntry(); }
+    updateEntryCount();
 }
 
 function renderEntry(entry, prepend) {
     const div = document.createElement('div');
-    div.className = 'entry';
+    const isVoice = entry.type === 'voice';
+    const isManual = entry.type === 'manual';
+    div.className = 'entry' + (isVoice ? ' voice-entry' : isManual ? ' manual-entry' : '');
     div.dataset.ts = entry.ts;
-    const cls = entry.type === 'voice' ? 'entry-voice' : entry.type === 'manual' ? 'entry-manual' : '';
-    const label = entry.type === 'voice' ? 'VOICE' : entry.type === 'manual' ? 'NOTE' : '';
+
+    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : '';
+    const badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : '';
+    const badgeHtml = badgeLabel ? `<span class="entry-badge ${badgeClass}">${badgeLabel}</span>` : '';
+
     if (entry.editable) {
-        div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><textarea rows="1" oninput="autoResize(this); updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
+        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div><textarea rows="1" oninput="autoResize(this); updateEntry(this)">${escapeHtml(entry.text)}</textarea>`;
     } else {
-        div.innerHTML = '<span class="entry-time">' + entry.time + '</span><span class="' + cls + '">' + label + ':</span><div class="entry-text">' + escapeHtml(entry.text) + '</div>';
+        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div><div class="entry-text">${escapeHtml(entry.text)}</div>`;
     }
+
     const header = els.notes.querySelector('.notes-header');
     if (prepend && header && header.nextSibling) els.notes.insertBefore(div, header.nextSibling);
     else els.notes.appendChild(div);
+
     if (entry.editable) {
         const ta = div.querySelector('textarea');
         autoResize(ta);
@@ -162,29 +469,16 @@ function renderEntry(entry, prepend) {
     }
 }
 
-function autoResize(ta) {
-    ta.style.height = 'auto';
-    ta.style.height = ta.scrollHeight + 'px';
-}
-
+function autoResize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 function updateEntry(ta) {
     const ts = parseInt(ta.parentElement.dataset.ts);
     const e = state.entries.find(function(x) { return x.ts === ts; });
     if (e) e.text = ta.value;
 }
+function removeLastEntry() { const entries = els.notes.querySelectorAll('.entry'); if (entries.length) entries[entries.length - 1].remove(); }
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-function removeLastEntry() {
-    const entries = els.notes.querySelectorAll('.entry');
-    if (entries.length) entries[entries.length - 1].remove();
-}
-
-function escapeHtml(t) {
-    const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
-}
-
-function addManualNote() {
-    addEntry('manual', '', true);
-}
+function addManualNote() { addEntry('manual', '', true); }
 
 function undoLast() {
     if (state.entries.length === 0) { showToast('Nothing to undo', 'error'); return; }
@@ -192,12 +486,17 @@ function undoLast() {
     const first = els.notes.querySelector('.entry');
     if (first) first.remove();
     showToast('Undone', 'success');
+    updateEntryCount();
 }
 
 function clearNotes() {
     state.entries = [];
     const header = els.notes.querySelector('.notes-header');
-    els.notes.innerHTML = ''; if (header) els.notes.appendChild(header);
+    const emptyState = els.notes.querySelector('#empty-state') || els.emptyState;
+    els.notes.innerHTML = '';
+    if (header) els.notes.appendChild(header);
+    els.notes.appendChild(els.emptyState);
+    updateEntryCount();
     showToast('Notes cleared', 'success');
 }
 
@@ -213,39 +512,18 @@ function buildText() {
 function copyToClipboard() {
     if (state.entries.length === 0) { showToast('No notes to copy', 'error'); return; }
     const text = buildText();
-
-    // iOS Safari fallback: use execCommand with hidden textarea
     function fallbackCopy() {
         const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.top = '0';
-        ta.style.left = '0';
-        ta.style.opacity = '0';
-        ta.style.pointerEvents = 'none';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.setSelectionRange(0, text.length);
-        try {
-            const ok = document.execCommand('copy');
-            document.body.removeChild(ta);
-            return ok;
-        } catch (e) {
-            document.body.removeChild(ta);
-            return false;
-        }
+        ta.value = text; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, text.length);
+        try { const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; }
+        catch (e) { document.body.removeChild(ta); return false; }
     }
-
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {
-            showToast('Copied to clipboard!', 'success');
-        }).catch(function() {
-            if (fallbackCopy()) showToast('Copied to clipboard!', 'success');
-            else showToast('Copy failed', 'error');
-        });
+        navigator.clipboard.writeText(text).then(function() { showToast('Copied!', 'success'); })
+        .catch(function() { if (fallbackCopy()) showToast('Copied!', 'success'); else showToast('Copy failed', 'error'); });
     } else {
-        if (fallbackCopy()) showToast('Copied to clipboard!', 'success');
-        else showToast('Copy failed', 'error');
+        if (fallbackCopy()) showToast('Copied!', 'success'); else showToast('Copy failed', 'error');
     }
 }
 
@@ -279,7 +557,7 @@ function setupRecog() {
     state.recognition.lang = state.settings.lang;
     state.recognition.onstart = function() {
         state.isListening = true; state.consecutiveErrors = 0;
-        updateStatus('listening', 'Listening...'); updateMainBtn();
+        updateStatus('listening', 'Listening'); updateMainBtn();
         addEntry('manual', '🎙️ Microphone active (' + LANG_NAMES[state.settings.lang] + ')');
     };
     state.recognition.onresult = function(e) {
@@ -315,7 +593,7 @@ function stopListening() {
     if (state.recognition) try { state.recognition.stop(); } catch(e){}
     releaseWakeLock();
     updateStatus('idle', 'Idle'); updateMainBtn();
-    addEntry('manual', 'Stopped listening');
+    addEntry('manual', '⏹ Stopped listening');
 }
 
 async function acquireWakeLock() {
@@ -328,8 +606,27 @@ function releaseWakeLock() {
 }
 
 function updateStatus(type, text) { els.status.className = 'status ' + type; els.status.textContent = text; }
-function updateMainBtn() { if (state.isListening) { els.mainBtn.className='main-btn stop'; els.btnIcon.textContent='⏹'; els.btnText.textContent='Stop Recording'; } else { els.mainBtn.className='main-btn start'; els.btnIcon.textContent='▶'; els.btnText.textContent='Start Recording'; } }
-function showToast(msg, type) { els.toast.textContent = msg; els.toast.className = 'toast show ' + (type||''); setTimeout(function() { els.toast.classList.remove('show'); }, 3000); }
+function updateMainBtn() {
+    if (state.isListening) {
+        els.mainBtn.className = 'main-btn stop';
+        els.btnIcon.textContent = '⏹';
+        els.btnText.textContent = 'Stop Recording';
+        els.waveform.classList.add('active');
+    } else {
+        els.mainBtn.className = 'main-btn start';
+        els.btnIcon.textContent = '▶';
+        els.btnText.textContent = 'Start Recording';
+        els.waveform.classList.remove('active');
+    }
+}
+
+let toastTimer;
+function showToast(msg, type) {
+    clearTimeout(toastTimer);
+    els.toast.textContent = msg;
+    els.toast.className = 'toast show ' + (type || '');
+    toastTimer = setTimeout(function() { els.toast.classList.remove('show'); }, 2800);
+}
 
 function loadSettings() { try { const s = localStorage.getItem('speaknote_settings'); if (s) Object.assign(state.settings, JSON.parse(s)); } catch(e){} setLang(state.settings.lang); }
 function saveSettings() { try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); } catch(e){} }
@@ -341,6 +638,6 @@ function setupInstall() {
 async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show'); deferredPrompt = null; }
 
 init();
-</script>
+    </script>
 </body>
 </html>
