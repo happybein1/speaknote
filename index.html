@@ -241,6 +241,9 @@
         }
         .entry.voice-entry { border-left: 2px solid var(--accent); }
         .entry.manual-entry { border-left: 2px solid rgba(255,217,61,0.4); }
+        .entry.system-entry { border-left: 2px solid rgba(112,112,160,0.35); opacity: 0.65; }
+        .entry.system-entry .entry-text { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--muted); }
+        .badge-system { background: rgba(112,112,160,0.12); color: var(--muted); border: 1px solid rgba(112,112,160,0.2); }
 
         /* Empty state */
         .empty-state {
@@ -389,35 +392,77 @@ const LANG_NAMES = {
     'zh-CN': '中文', 'nl-NL': 'Nederlands'
 };
 
+// Error explanations shown to the user in plain language
+const ERROR_MESSAGES = {
+    'network':      'Network error — speech service unreachable. Check your connection.',
+    'not-allowed':  'Microphone access denied. Allow mic in browser settings.',
+    'no-speech':    'No speech detected.',
+    'aborted':      'Microphone input was aborted.',
+    'audio-capture':'No microphone found or mic is in use by another app.',
+    'service-not-allowed': 'Speech service blocked. Try a different browser.',
+    'bad-grammar':  'Speech grammar error.',
+    'language-not-supported': 'Selected language not supported by this browser.'
+};
+
+// Errors that should NOT count toward the consecutive error limit
+const IGNORABLE_ERRORS = new Set(['no-speech', 'aborted']);
+
+// Errors that should stop listening entirely (no retry makes sense)
+const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
+
+// Backoff delays (ms) per error type for network issues
+const NETWORK_BACKOFF = [1000, 2000, 4000, 8000];
+
 let state = {
     entries: [], isListening: false, recognition: null, wakeLock: null,
     settings: { autorestart: true, lang: 'en-US' },
-    consecutiveErrors: 0, lastCmdTime: 0
+    consecutiveErrors: 0, lastCmdTime: 0,
+    errorCount: {},      // per error-type counts for diagnostics
+    restartPending: false // guard against double-restarts from onerror + onend
 };
 let deferredPrompt = null;
 
 const els = {
-    status: document.getElementById('status'),
-    mainBtn: document.getElementById('main-btn'),
-    btnIcon: document.getElementById('btn-icon'),
-    btnText: document.getElementById('btn-text'),
-    notes: document.getElementById('notes'),
-    toast: document.getElementById('toast'),
-    noSleep: document.getElementById('no-sleep'),
-    waveform: document.getElementById('waveform'),
+    status:    document.getElementById('status'),
+    mainBtn:   document.getElementById('main-btn'),
+    btnIcon:   document.getElementById('btn-icon'),
+    btnText:   document.getElementById('btn-text'),
+    notes:     document.getElementById('notes'),
+    toast:     document.getElementById('toast'),
+    noSleep:   document.getElementById('no-sleep'),
+    waveform:  document.getElementById('waveform'),
     noteCount: document.getElementById('note-count'),
-    emptyState: document.getElementById('empty-state'),
+    emptyState:document.getElementById('empty-state'),
 };
 
+// ── Diagnostics log (visible in entries + console) ──────────────────────────
+function logDiag(msg, isError) {
+    const prefix = isError ? '⚠️' : 'ℹ️';
+    console[isError ? 'error' : 'log']('[SpeakNote]', msg);
+    addEntry('system', prefix + ' ' + msg);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
 function init() {
     loadSettings();
     setupInstall();
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(function() { console.log('[SpeakNote] SW registered'); })
+            .catch(function(e) { console.warn('[SpeakNote] SW failed:', e); });
+    }
+    // Log browser speech support on load
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) logDiag('Speech recognition not supported in this browser.', true);
+    else console.log('[SpeakNote] SpeechRecognition available');
 }
 
+// ── Language ─────────────────────────────────────────────────────────────────
 function setLang(lang) {
     state.settings.lang = lang;
-    document.querySelectorAll('.lang-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.lang === lang); });
+    document.querySelectorAll('.lang-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.lang === lang);
+    });
     saveSettings();
     showToast('Language: ' + LANG_NAMES[lang], 'success');
     if (state.isListening) {
@@ -426,36 +471,52 @@ function setLang(lang) {
     }
 }
 
+// ── Entry count & empty state ─────────────────────────────────────────────────
 function updateEntryCount() {
-    const n = state.entries.length;
+    // Count only user-facing entries (voice + manual), not system logs
+    const n = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
     els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
-    els.emptyState.style.display = n === 0 ? 'flex' : 'none';
+    // Show empty state only if zero entries total
+    els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
 }
 
+// ── Entries ───────────────────────────────────────────────────────────────────
 function addEntry(type, text, editable) {
     const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const entry = { type: type, text: text, time: time, ts: Date.now(), editable: !!editable };
     state.entries.unshift(entry);
     renderEntry(entry, true);
-    while (state.entries.length > 200) { state.entries.pop(); removeLastEntry(); }
+    // Cap at 200 entries
+    while (state.entries.length > 200) {
+        state.entries.pop();
+        var domEntries = els.notes.querySelectorAll('.entry');
+        if (domEntries.length) domEntries[domEntries.length - 1].remove();
+    }
     updateEntryCount();
 }
 
 function renderEntry(entry, prepend) {
     const div = document.createElement('div');
-    const isVoice = entry.type === 'voice';
+    const isVoice  = entry.type === 'voice';
     const isManual = entry.type === 'manual';
-    div.className = 'entry' + (isVoice ? ' voice-entry' : isManual ? ' manual-entry' : '');
-    div.dataset.ts = entry.ts;
+    const isSystem = entry.type === 'system';
 
-    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : '';
-    const badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : '';
-    const badgeHtml = badgeLabel ? `<span class="entry-badge ${badgeClass}">${badgeLabel}</span>` : '';
+    div.className = 'entry' +
+        (isVoice  ? ' voice-entry'  : '') +
+        (isManual ? ' manual-entry' : '') +
+        (isSystem ? ' system-entry' : '');
+    div.dataset.ts = String(entry.ts);
+
+    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : isSystem ? 'badge-system' : '';
+    const badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : isSystem ? 'System' : '';
+    const badgeHtml  = badgeLabel ? `<span class="entry-badge ${badgeClass}">${badgeLabel}</span>` : '';
 
     if (entry.editable) {
-        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div><textarea rows="1" oninput="autoResize(this); updateEntry(this)">${escapeHtml(entry.text)}</textarea>`;
+        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div>` +
+            `<textarea rows="1" oninput="autoResize(this);updateEntry(this)">${escapeHtml(entry.text)}</textarea>`;
     } else {
-        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div><div class="entry-text">${escapeHtml(entry.text)}</div>`;
+        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div>` +
+            `<div class="entry-text">${escapeHtml(entry.text)}</div>`;
     }
 
     const header = els.notes.querySelector('.notes-header');
@@ -470,13 +531,19 @@ function renderEntry(entry, prepend) {
 }
 
 function autoResize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+
 function updateEntry(ta) {
-    const ts = parseInt(ta.parentElement.dataset.ts);
+    const ts = Number(ta.closest('.entry').dataset.ts); // use closest, not parentElement
+    if (!ts) return;
     const e = state.entries.find(function(x) { return x.ts === ts; });
     if (e) e.text = ta.value;
 }
-function removeLastEntry() { const entries = els.notes.querySelectorAll('.entry'); if (entries.length) entries[entries.length - 1].remove(); }
-function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+function escapeHtml(t) {
+    const d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
 
 function addManualNote() { addEntry('manual', '', true); }
 
@@ -491,99 +558,171 @@ function undoLast() {
 
 function clearNotes() {
     state.entries = [];
-    const header = els.notes.querySelector('.notes-header');
-    const emptyState = els.notes.querySelector('#empty-state') || els.emptyState;
-    els.notes.innerHTML = '';
-    if (header) els.notes.appendChild(header);
-    els.notes.appendChild(els.emptyState);
+    // Remove all .entry nodes but keep .notes-header and #empty-state
+    els.notes.querySelectorAll('.entry').forEach(function(el) { el.remove(); });
     updateEntryCount();
     showToast('Notes cleared', 'success');
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
 function buildText() {
-    const lines = state.entries.slice().reverse().map(function(e) {
-        const label = e.type === 'voice' ? '[VOICE]' : e.type === 'manual' ? '[NOTE]' : '';
-        var indented = e.text.split(/\r?\n/).map(function(line) { return '    ' + line; }).join('\n');
-        return e.time + '  ' + label + '\n' + indented;
+    // Export only voice + manual entries, not system logs
+    const exportable = state.entries.slice().reverse().filter(function(e) {
+        return e.type === 'voice' || e.type === 'manual';
     });
-    return lines.join('\n\n');
+    return exportable.map(function(e) {
+        const label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
+        const body  = e.text.split(/\r?\n/).map(function(l) { return '    ' + l; }).join('\n');
+        return e.time + '  ' + label + '\n' + body;
+    }).join('\n\n');
 }
 
 function copyToClipboard() {
-    if (state.entries.length === 0) { showToast('No notes to copy', 'error'); return; }
+    const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    if (exportable.length === 0) { showToast('No notes to copy', 'error'); return; }
     const text = buildText();
     function fallbackCopy() {
         const ta = document.createElement('textarea');
-        ta.value = text; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
-        document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, text.length);
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        document.body.appendChild(ta);
+        ta.focus(); ta.setSelectionRange(0, text.length);
         try { const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; }
-        catch (e) { document.body.removeChild(ta); return false; }
+        catch(e) { document.body.removeChild(ta); return false; }
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() { showToast('Copied!', 'success'); })
-        .catch(function() { if (fallbackCopy()) showToast('Copied!', 'success'); else showToast('Copy failed', 'error'); });
+        navigator.clipboard.writeText(text)
+            .then(function() { showToast('Copied!', 'success'); })
+            .catch(function() { fallbackCopy() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error'); });
     } else {
-        if (fallbackCopy()) showToast('Copied!', 'success'); else showToast('Copy failed', 'error');
+        fallbackCopy() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error');
     }
 }
 
 function exportText() {
-    if (state.entries.length === 0) { showToast('No notes to export', 'error'); return; }
+    const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    if (exportable.length === 0) { showToast('No notes to export', 'error'); return; }
     const text = buildText();
     const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0,10) + '.txt';
-    a.click(); URL.revokeObjectURL(url);
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'speaknote-' + new Date().toISOString().slice(0, 10) + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke so browser has time to start the download
+    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
     showToast('Exported!', 'success');
 }
 
+// ── Speech recognition ────────────────────────────────────────────────────────
 function processCommand(t) {
     const now = Date.now();
-    if (now - state.lastCmdTime < 400) return;
+    if (now - state.lastCmdTime < 400) return; // debounce duplicate firings
     state.lastCmdTime = now;
     state.consecutiveErrors = 0;
-    if (t.length < 1) return;
-    if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('manual', 'Stopped by voice'); }
+    if (!t) return;
+    if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('system', 'Stopped by voice command'); }
     else { addEntry('voice', t); }
 }
 
 function setupRecog() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showToast('Speech recognition not supported', 'error'); return false; }
-    state.recognition = new SR();
-    state.recognition.continuous = true;
-    state.recognition.interimResults = false;
-    state.recognition.lang = state.settings.lang;
-    state.recognition.onstart = function() {
-        state.isListening = true; state.consecutiveErrors = 0;
-        updateStatus('listening', 'Listening'); updateMainBtn();
-        addEntry('manual', '🎙️ Microphone active (' + LANG_NAMES[state.settings.lang] + ')');
+    if (!SR) {
+        showToast('Speech recognition not supported', 'error');
+        logDiag('SpeechRecognition API unavailable in this browser.', true);
+        return false;
+    }
+    const recog = new SR();
+    recog.continuous      = true;
+    recog.interimResults  = false;
+    recog.lang            = state.settings.lang;
+    state.recognition     = recog;
+
+    recog.onstart = function() {
+        state.isListening    = true;
+        state.consecutiveErrors = 0;
+        state.restartPending = false;
+        updateStatus('listening', 'Listening');
+        updateMainBtn();
+        console.log('[SpeakNote] Recognition started, lang:', state.settings.lang);
+        addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
     };
-    state.recognition.onresult = function(e) {
-        const r = e.results[e.results.length-1];
+
+    recog.onresult = function(e) {
+        const r = e.results[e.results.length - 1];
         if (r.isFinal) processCommand(r[0].transcript.trim());
     };
-    state.recognition.onerror = function(e) {
-        state.consecutiveErrors++;
-        if (e.error === 'no-speech') addEntry('manual', 'No speech detected');
-        else if (e.error === 'not-allowed') { updateStatus('error', 'Mic denied'); showToast('Allow microphone access', 'error'); stopListening(); return; }
-        else { updateStatus('error', e.error); addEntry('manual', 'Error: ' + e.error); }
-        if (state.settings.autorestart && state.isListening && state.consecutiveErrors < 5) {
-            setTimeout(function() { if (state.isListening) safeStart(); }, 500);
-        } else if (state.consecutiveErrors >= 5) { updateStatus('error', 'Too many errors'); stopListening(); }
+
+    recog.onerror = function(e) {
+        const errCode = e.error;
+        const friendly = ERROR_MESSAGES[errCode] || ('Unknown error: ' + errCode);
+
+        // Track per-type counts for diagnostics
+        state.errorCount[errCode] = (state.errorCount[errCode] || 0) + 1;
+        console.error('[SpeakNote] Recognition error:', errCode, '(total:', state.errorCount[errCode] + ')');
+
+        if (FATAL_ERRORS.has(errCode)) {
+            updateStatus('error', errCode);
+            showToast(friendly, 'error');
+            logDiag('Fatal: ' + friendly, true);
+            stopListening();
+            return;
+        }
+
+        if (!IGNORABLE_ERRORS.has(errCode)) {
+            state.consecutiveErrors++;
+            updateStatus('error', errCode);
+            logDiag(friendly + ' (attempt ' + state.consecutiveErrors + ')', true);
+            showToast(friendly, 'error');
+        }
+        // no-speech / aborted: silent, don't increment counter
+
+        if (state.consecutiveErrors >= 5) {
+            logDiag('Too many consecutive errors — stopping. Last error: ' + errCode, true);
+            showToast('Stopped after repeated errors', 'error');
+            stopListening();
+            return;
+        }
+
+        // Schedule a restart from onerror; set flag so onend doesn't also restart
+        if (state.isListening && state.settings.autorestart && !state.restartPending) {
+            state.restartPending = true;
+            var delay = errCode === 'network'
+                ? (NETWORK_BACKOFF[Math.min(state.consecutiveErrors - 1, NETWORK_BACKOFF.length - 1)] || 1000)
+                : 500;
+            if (errCode === 'network') logDiag('Network error — retrying in ' + (delay/1000) + 's…', true);
+            setTimeout(function() {
+                state.restartPending = false;
+                if (state.isListening) safeStart();
+            }, delay);
+        }
     };
-    state.recognition.onend = function() {
-        // Only restart if we're still supposed to be listening (not manually stopped)
-        if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 150);
+
+    recog.onend = function() {
+        console.log('[SpeakNote] Recognition ended. isListening:', state.isListening, 'restartPending:', state.restartPending);
+        // Only restart from onend if onerror hasn't already scheduled one
+        if (state.isListening && state.settings.autorestart && !state.restartPending) {
+            state.restartPending = true;
+            setTimeout(function() {
+                state.restartPending = false;
+                if (state.isListening) safeStart();
+            }, 150);
+        }
     };
+
     return true;
 }
 
 function safeStart() {
-    // Always create a fresh instance to avoid InvalidStateError on reuse
-    if (!setupRecog()) return;
-    try { state.recognition.start(); } catch(e) { console.error('safeStart error', e); }
+    if (!setupRecog()) return; // fresh instance every time
+    try {
+        state.recognition.start();
+    } catch(e) {
+        console.error('[SpeakNote] safeStart error:', e.name, e.message);
+        logDiag('Could not start microphone: ' + e.message, true);
+    }
 }
 
 async function toggleListening() {
@@ -596,18 +735,24 @@ async function toggleListening() {
 }
 
 function stopListening() {
-    state.isListening = false; state.consecutiveErrors = 0;
-    // Null out first so onend auto-restart guard fires correctly
+    state.isListening    = false;
+    state.consecutiveErrors = 0;
+    state.restartPending = false;
     const recog = state.recognition;
-    state.recognition = null;
-    if (recog) try { recog.stop(); } catch(e){}
+    state.recognition = null; // null before .stop() so onend guard fires correctly
+    if (recog) try { recog.stop(); } catch(e) { console.warn('[SpeakNote] stop() threw:', e); }
     releaseWakeLock();
-    updateStatus('idle', 'Idle'); updateMainBtn();
-    addEntry('manual', '⏹ Stopped listening');
+    updateStatus('idle', 'Idle');
+    updateMainBtn();
+    addEntry('system', '⏹ Stopped');
 }
 
+// ── Wake lock ─────────────────────────────────────────────────────────────────
 async function acquireWakeLock() {
-    if ('wakeLock' in navigator) { try { state.wakeLock = await navigator.wakeLock.request('screen'); return; } catch(err) {} }
+    if ('wakeLock' in navigator) {
+        try { state.wakeLock = await navigator.wakeLock.request('screen'); return; }
+        catch(e) { console.warn('[SpeakNote] WakeLock failed:', e); }
+    }
     try { await els.noSleep.play(); } catch(e) {}
 }
 function releaseWakeLock() {
@@ -615,15 +760,19 @@ function releaseWakeLock() {
     try { els.noSleep.pause(); } catch(e) {}
 }
 
-function updateStatus(type, text) { els.status.className = 'status ' + type; els.status.textContent = text; }
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function updateStatus(type, text) {
+    els.status.className  = 'status ' + type;
+    els.status.textContent = text;
+}
 function updateMainBtn() {
     if (state.isListening) {
-        els.mainBtn.className = 'main-btn stop';
+        els.mainBtn.className  = 'main-btn stop';
         els.btnIcon.textContent = '⏹';
         els.btnText.textContent = 'Stop Recording';
         els.waveform.classList.add('active');
     } else {
-        els.mainBtn.className = 'main-btn start';
+        els.mainBtn.className  = 'main-btn start';
         els.btnIcon.textContent = '▶';
         els.btnText.textContent = 'Start Recording';
         els.waveform.classList.remove('active');
@@ -634,18 +783,42 @@ let toastTimer;
 function showToast(msg, type) {
     clearTimeout(toastTimer);
     els.toast.textContent = msg;
-    els.toast.className = 'toast show ' + (type || '');
-    toastTimer = setTimeout(function() { els.toast.classList.remove('show'); }, 2800);
+    els.toast.className   = 'toast show ' + (type || '');
+    toastTimer = setTimeout(function() { els.toast.classList.remove('show'); }, 3200);
 }
 
-function loadSettings() { try { const s = localStorage.getItem('speaknote_settings'); if (s) Object.assign(state.settings, JSON.parse(s)); } catch(e){} setLang(state.settings.lang); }
-function saveSettings() { try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); } catch(e){} }
+// ── Settings ──────────────────────────────────────────────────────────────────
+function loadSettings() {
+    try {
+        const s = localStorage.getItem('speaknote_settings');
+        if (s) Object.assign(state.settings, JSON.parse(s));
+    } catch(e) { console.warn('[SpeakNote] Could not load settings:', e); }
+    setLang(state.settings.lang);
+}
+function saveSettings() {
+    try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); }
+    catch(e) { console.warn('[SpeakNote] Could not save settings:', e); }
+}
 
+// ── PWA install ───────────────────────────────────────────────────────────────
 function setupInstall() {
-    window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
-    window.addEventListener('appinstalled', function() { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); showToast('SpeakNote installed!', 'success'); });
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault(); deferredPrompt = e;
+        document.getElementById('install-banner').classList.add('show');
+    });
+    window.addEventListener('appinstalled', function() {
+        deferredPrompt = null;
+        document.getElementById('install-banner').classList.remove('show');
+        showToast('SpeakNote installed!', 'success');
+    });
 }
-async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show'); deferredPrompt = null; }
+async function installPWA() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const r = await deferredPrompt.userChoice;
+    if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show');
+    deferredPrompt = null;
+}
 
 init();
     </script>
