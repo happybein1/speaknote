@@ -573,24 +573,34 @@ function setupRecog() {
             setTimeout(function() { if (state.isListening) safeStart(); }, 500);
         } else if (state.consecutiveErrors >= 5) { updateStatus('error', 'Too many errors'); stopListening(); }
     };
-    state.recognition.onend = function() { if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 100); };
+    state.recognition.onend = function() {
+        // Only restart if we're still supposed to be listening (not manually stopped)
+        if (state.isListening && state.settings.autorestart) setTimeout(safeStart, 150);
+    };
     return true;
 }
 
-function safeStart() { if (!state.recognition) return; try { state.recognition.start(); } catch(e) { if (e.name !== 'InvalidStateError') console.error(e); } }
+function safeStart() {
+    // Always create a fresh instance to avoid InvalidStateError on reuse
+    if (!setupRecog()) return;
+    try { state.recognition.start(); } catch(e) { console.error('safeStart error', e); }
+}
 
 async function toggleListening() {
-    if (state.isListening) stopListening();
-    else {
-        if (!state.recognition) { if (!setupRecog()) return; }
-        try { state.recognition.lang = state.settings.lang; state.recognition.start(); await acquireWakeLock(); }
-        catch(e) { showToast('Could not start: '+e.message, 'error'); }
+    if (state.isListening) {
+        stopListening();
+    } else {
+        await acquireWakeLock();
+        safeStart();
     }
 }
 
 function stopListening() {
     state.isListening = false; state.consecutiveErrors = 0;
-    if (state.recognition) try { state.recognition.stop(); } catch(e){}
+    // Null out first so onend auto-restart guard fires correctly
+    const recog = state.recognition;
+    state.recognition = null;
+    if (recog) try { recog.stop(); } catch(e){}
     releaseWakeLock();
     updateStatus('idle', 'Idle'); updateMainBtn();
     addEntry('manual', '⏹ Stopped listening');
