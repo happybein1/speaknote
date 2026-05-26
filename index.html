@@ -418,12 +418,12 @@ function init() {
 function setLang(lang) {
     state.settings.lang = lang;
     document.querySelectorAll('.lang-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.lang === lang); });
-    if (state.recognition) {
-        state.recognition.lang = lang;
-        if (state.isListening) { stopListening(); setTimeout(toggleListening, 300); }
-    }
     saveSettings();
     showToast('Language: ' + LANG_NAMES[lang], 'success');
+    if (state.isListening) {
+        stopListening();
+        setTimeout(function() { safeStart(); }, 400);
+    }
 }
 
 function updateEntryCount() {
