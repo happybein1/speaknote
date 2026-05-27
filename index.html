@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.3</title>
+    <title>SpeakNote v1.3.2</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -66,7 +66,6 @@
             border-radius:20px; border:1px solid rgba(0,212,170,0.25);
             font-family:'DM Mono',monospace;
         }
-        .header-right{display:flex;align-items:center;gap:8px;}
         .status{
             padding:5px 13px; border-radius:20px; font-size:11px;
             font-weight:600; text-transform:uppercase; letter-spacing:0.8px;
@@ -80,13 +79,9 @@
         .status.starting{background:var(--warn);color:#000;}
         .status.error{background:var(--danger);color:#fff;}
         @keyframes statusPulse{0%,100%{opacity:1;box-shadow:0 0 16px var(--accent-glow);}50%{opacity:0.75;box-shadow:0 0 28px var(--accent-glow);}}
-        /* Debug toggle button */
-        .debug-btn{
-            width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
-            background:var(--card);color:var(--muted);font-size:13px;cursor:pointer;
-            display:flex;align-items:center;justify-content:center;flex-shrink:0;
-        }
-        .debug-btn.active{background:var(--warn);color:#000;border-color:var(--warn);}
+        /* Debug button (in secondary row) */
+        .debug-sec-btn{flex:0 0 auto;min-width:52px;opacity:0.5;}
+        .debug-sec-btn.active{opacity:1;background:rgba(255,217,61,0.15);border-color:var(--warn);color:var(--warn);}
         /* Lang bar */
         .lang-bar{
             display:flex;gap:6px;padding:9px 16px;background:var(--bg2);
@@ -120,7 +115,7 @@
         .main-btn.start:hover{box-shadow:0 4px 32px rgba(0,212,170,0.4);transform:translateY(-1px);}
         .main-btn.stop{background:linear-gradient(135deg,#ff6b6b 0%,#ee5252 100%);color:#fff;box-shadow:0 4px 24px rgba(255,107,107,0.25);}
         .main-btn.stop:hover{box-shadow:0 4px 32px rgba(255,107,107,0.4);transform:translateY(-1px);}
-        .secondary{display:flex;gap:6px;}
+        .secondary{display:flex;gap:6px;flex-wrap:nowrap;overflow:hidden;}
         .sec-btn{
             flex:1;padding:10px 4px;border-radius:var(--radius-sm);
             border:1px solid var(--border);background:var(--card);color:var(--muted);
@@ -233,12 +228,9 @@
     <div class="header">
         <div class="header-left">
             <div class="logo-icon">🎙️</div>
-            <h1>SpeakNote <span class="version">v1.3</span></h1>
+            <h1>SpeakNote <span class="version">v1.3.2</span></h1>
         </div>
-        <div class="header-right">
-            <button class="debug-btn" id="debug-btn" onclick="toggleDebug()" title="Debug log">🐛</button>
-            <div class="status idle" id="status">Idle</div>
-        </div>
+        <div class="status idle" id="status">Idle</div>
     </div>
 
     <div class="lang-bar" id="lang-bar">
@@ -265,11 +257,12 @@
             <button class="sec-btn" onclick="undoLast()"><span class="sec-icon">↩</span><span>Undo</span></button>
             <button class="sec-btn" onclick="copyToClipboard()"><span class="sec-icon">📋</span><span>Copy</span></button>
             <button class="sec-btn" onclick="exportText()"><span class="sec-icon">⬇</span><span>Export</span></button>
+            <button class="sec-btn debug-sec-btn active" onclick="toggleDebug()" id="debug-btn" title="Debug log"><span class="sec-icon">🐛</span><span>Debug</span></button>
         </div>
     </div>
 
     <!-- On-screen debug panel — toggle with 🐛 button -->
-    <div class="debug-panel" id="debug-panel">
+    <div class="debug-panel show" id="debug-panel">
         <div class="debug-panel-header">
             <span class="debug-panel-title">🐛 Debug Log</span>
             <button class="debug-clear" onclick="clearDebugLog()">Clear</button>
@@ -309,8 +302,8 @@
 // SpeakNote v1.3
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.3';
-const APP_BUILD   = '2026-05-27-3';
+const APP_VERSION = '1.3.2';
+const APP_BUILD   = '2026-05-27-5';
 
 // ── Debug logger — logs to console AND on-screen panel ───────────────────────
 var debugLines = [];
@@ -342,6 +335,7 @@ function toggleDebug() {
     var show  = !panel.classList.contains('show');
     panel.classList.toggle('show', show);
     btn.classList.toggle('active', show);
+    if (show) panel.scrollTop = 0; // scroll to top (newest entries) on open
 }
 function clearDebugLog() {
     debugLines = [];
@@ -367,12 +361,15 @@ var ENGINE = IS_IOS ? 'iOS-WebKit' : IS_WEBKIT ? 'WebKit' : IS_EDGE ? 'Edge' : I
 // iOS WebKit needs longer delays for audio session handoff between short sessions.
 var TIMING = IS_IOS ? {
     restartDelay:    700,
-    networkBackoff:  [2000, 4000, 8000, 16000],
-    maxErrors:       4
+    // iOS WebKit STT server (Apple) — moderate backoff
+    networkBackoff:  [2000, 5000, 10000, 20000],
+    maxErrors:       6
 } : {
     restartDelay:    120,
-    networkBackoff:  [1000, 2000, 4000, 8000],
-    maxErrors:       5
+    // Edge (Azure STT) and Chrome (Google STT) can both rate-limit on rapid reconnects.
+    // Longer backoff gives the server time to recover. Max 8 errors so it keeps trying.
+    networkBackoff:  [3000, 6000, 12000, 24000, 30000, 30000],
+    maxErrors:       8
 };
 
 // ── Language map ──────────────────────────────────────────────────────────────
@@ -409,9 +406,9 @@ var state = {
     lastCmdTime:      0,
     errorCount:       {},
     sessionLogged:    false,   // true once "Mic active" entry logged for this user session
-    nextRestartDelay: 0,       // ms: delay for onend restart (set by onerror)
     startAttempts:    0,       // rapid-start-fail guard counter
-    guardTimer:       null     // timeout handle for restart scheduling
+    guardTimer:       null,    // timeout handle for restart scheduling
+    errorHandled:     false    // true when onerror already scheduled a restart, so onend skips
 };
 var deferredPrompt = null;
 
@@ -691,14 +688,18 @@ function _buildSession() {
     }
 
     var recog = new SR();
-    recog.continuous     = false; // short-session: most reliable across all browsers
-    recog.interimResults = false;
+    // continuous:true — keeps the session open across pauses, no per-utterance timeouts.
+    // The previous race condition (onerror + onend both restarting) is now solved with
+    // state.errorHandled: onerror sets it true and owns the restart; onend checks it first.
+    recog.continuous      = true;
+    recog.interimResults  = false;
     recog.maxAlternatives = 1;
-    recog.lang           = state.settings.lang;
+    recog.lang            = state.settings.lang;
 
     recog.onstart = function() {
-        dbg('onstart fired — lang:' + state.settings.lang + ' attempt:' + state.startAttempts, 'ok');
-        state.startAttempts = 0; // reset rapid-fail guard on successful start
+        dbg('onstart — lang:' + state.settings.lang + ' attempts:' + state.startAttempts, 'ok');
+        state.startAttempts = 0;
+        state.errorHandled  = false;
         if (!state.sessionLogged) {
             state.sessionLogged = true;
             updateStatus('listening', 'Listening');
@@ -720,53 +721,72 @@ function _buildSession() {
         state.errorCount[code] = (state.errorCount[code] || 0) + 1;
         dbg('onerror: ' + code + ' | consec:' + state.consecutiveErrors + ' | total:' + state.errorCount[code], 'err');
 
+        // Fatal — stop entirely
         if (FATAL[code]) {
             var msg = ERROR_MSG[code] || code;
             showToast(msg, 'error');
             addEntry('system', '⚠️ Fatal — ' + msg);
+            state.errorHandled = true;
             _haltSession();
             return;
         }
 
+        // Ignorable — no-speech on continuous mode just means silence; stay open.
+        // aborted means we called .abort() ourselves — onend handles cleanup.
         if (IGNORABLE[code]) {
-            dbg('Ignorable error (' + code + ') — onend will restart', 'info');
+            dbg('Ignorable (' + code + ') — continuous session stays open', 'info');
+            // For continuous mode, no-speech doesn't end the session — do nothing.
+            // aborted ends the session — onend will fire and restart if needed.
             return;
         }
 
-        // Countable error
+        // Countable error (network etc.)
         state.consecutiveErrors++;
         var friendly = ERROR_MSG[code] || ('Unknown error: ' + code);
-        showToast(friendly, 'error');
-        dbg(friendly + ' (consecutive: ' + state.consecutiveErrors + ')', 'warn');
+        dbg(friendly + ' (' + state.consecutiveErrors + '/' + TIMING.maxErrors + ')', 'warn');
 
         if (state.consecutiveErrors >= TIMING.maxErrors) {
-            addEntry('system', '⚠️ Stopped after ' + TIMING.maxErrors + ' errors. Last: ' + code);
             showToast('Stopped — too many errors', 'error');
+            addEntry('system', '⚠️ Stopped after ' + state.consecutiveErrors + ' errors. Last: ' + code);
+            state.errorHandled = true;
             _haltSession();
             return;
         }
 
-        // Set restart delay — onend picks this up
+        // Schedule restart — mark errorHandled so onend doesn't double-restart
+        state.errorHandled = true;
         if (code === 'network') {
             var idx   = Math.min(state.consecutiveErrors - 1, TIMING.networkBackoff.length - 1);
             var delay = TIMING.networkBackoff[idx];
+            dbg('Network backoff ' + (delay/1000) + 's', 'warn');
             addEntry('system', '⚠️ Network error (attempt ' + state.consecutiveErrors + ') — retrying in ' + (delay/1000) + 's');
-            state.nextRestartDelay = delay;
+            if (state.consecutiveErrors === 1) showToast(friendly, 'error');
+            // abort() triggers onend which will see errorHandled=true and skip
+            // We schedule restart ourselves here with the backoff delay
+            _abortCurrentRecog();
+            _scheduleRestart(delay);
         } else {
-            state.nextRestartDelay = TIMING.restartDelay * 3;
+            showToast(friendly, 'error');
+            _abortCurrentRecog();
+            _scheduleRestart(TIMING.restartDelay * 4);
         }
-        // onend always fires after onerror — it will call _scheduleRestart
     };
 
     recog.onend = function() {
-        dbg('onend | isListening:' + state.isListening + ' delay:' + state.nextRestartDelay, 'info');
+        dbg('onend | isListening:' + state.isListening + ' errorHandled:' + state.errorHandled, 'info');
         if (!state.isListening) {
-            dbg('onend: not listening, doing nothing', 'info');
+            dbg('onend: stopped by user, not restarting', 'info');
             return;
         }
-        var delay = state.nextRestartDelay || TIMING.restartDelay;
-        state.nextRestartDelay = 0;
-        _scheduleRestart(delay);
+        if (state.errorHandled) {
+            // onerror already owns the restart — reset flag and do nothing
+            dbg('onend: errorHandled=true, restart already scheduled', 'info');
+            state.errorHandled = false;
+            return;
+        }
+        // Clean end (shouldn't happen often with continuous:true, but handle it)
+        dbg('onend: clean end — restarting after ' + TIMING.restartDelay + 'ms', 'info');
+        _scheduleRestart(TIMING.restartDelay);
     };
 
     return recog;
@@ -824,10 +844,10 @@ function _startSession() {
 function _haltSession() {
     dbg('_haltSession called', 'info');
     clearTimeout(state.guardTimer);
-    state.isListening      = false;
-    state.sessionLogged    = false;
-    state.nextRestartDelay = 0;
-    state.startAttempts    = 0;
+    state.isListening   = false;
+    state.sessionLogged = false;
+    state.errorHandled  = false;
+    state.startAttempts = 0;
     _abortCurrentRecog();
     releaseWakeLock();
     updateStatus('idle', 'Idle');
