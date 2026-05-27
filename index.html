@@ -417,8 +417,9 @@ let state = {
     entries: [], isListening: false, recognition: null, wakeLock: null,
     settings: { autorestart: true, lang: 'en-US' },
     consecutiveErrors: 0, lastCmdTime: 0,
-    errorCount: {},      // per error-type counts for diagnostics
-    restartPending: false // guard against double-restarts from onerror + onend
+    errorCount: {},        // per error-type counts for diagnostics
+    sessionActive: false,  // true once mic-active entry has been logged for this user session
+    nextRestartDelay: 0    // delay (ms) onend should wait before restarting (set by onerror)
 };
 let deferredPrompt = null;
 
@@ -466,8 +467,13 @@ function setLang(lang) {
     saveSettings();
     showToast('Language: ' + LANG_NAMES[lang], 'success');
     if (state.isListening) {
-        stopListening();
-        setTimeout(function() { safeStart(); }, 400);
+        // Restart with new language — abort current session, new one picks up lang from state
+        if (state.recognition) {
+            try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
+            state.recognition = null;
+        }
+        state.sessionActive = false; // so new lang gets logged
+        setTimeout(function() { if (state.isListening) _startSession(); }, 300);
     }
 }
 
@@ -617,133 +623,165 @@ function exportText() {
 }
 
 // ── Speech recognition ────────────────────────────────────────────────────────
+// Architecture: non-continuous short sessions.
+// We use continuous:false so the browser naturally ends each session after
+// a phrase. onend then restarts a fresh instance. This avoids the
+// continuous:true network-error / double-restart race entirely.
+
 function processCommand(t) {
     const now = Date.now();
-    if (now - state.lastCmdTime < 400) return; // debounce duplicate firings
+    if (now - state.lastCmdTime < 300) return; // debounce
     state.lastCmdTime = now;
-    state.consecutiveErrors = 0;
     if (!t) return;
-    if (/^(stop|pause|halt)/i.test(t)) { stopListening(); addEntry('system', 'Stopped by voice command'); }
-    else { addEntry('voice', t); }
+    if (/^(stop|pause|halt)/i.test(t)) {
+        stopListening();
+        addEntry('system', 'Stopped by voice command');
+    } else {
+        state.consecutiveErrors = 0; // successful result resets error count
+        addEntry('voice', t);
+    }
 }
 
-function setupRecog() {
+function buildSession() {
+    // Returns a fresh SpeechRecognition instance, does NOT start it.
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-        showToast('Speech recognition not supported', 'error');
-        logDiag('SpeechRecognition API unavailable in this browser.', true);
-        return false;
-    }
+    if (!SR) return null;
     const recog = new SR();
-    recog.continuous      = true;
-    recog.interimResults  = false;
-    recog.lang            = state.settings.lang;
-    state.recognition     = recog;
+    recog.continuous     = false; // KEY: short-session mode — no continuous stream to lose
+    recog.interimResults = false;
+    recog.lang           = state.settings.lang;
 
     recog.onstart = function() {
-        state.isListening    = true;
-        state.consecutiveErrors = 0;
-        state.restartPending = false;
-        updateStatus('listening', 'Listening');
-        updateMainBtn();
-        console.log('[SpeakNote] Recognition started, lang:', state.settings.lang);
-        addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
+        // Only log mic-active once at the start of a user session, not every restart
+        if (!state.sessionActive) {
+            state.sessionActive = true;
+            updateStatus('listening', 'Listening');
+            updateMainBtn();
+            addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
+            console.log('[SpeakNote] Session started, lang:', state.settings.lang);
+        }
     };
 
     recog.onresult = function(e) {
-        const r = e.results[e.results.length - 1];
-        if (r.isFinal) processCommand(r[0].transcript.trim());
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) processCommand(e.results[i][0].transcript.trim());
+        }
     };
 
     recog.onerror = function(e) {
         const errCode = e.error;
-        const friendly = ERROR_MESSAGES[errCode] || ('Unknown error: ' + errCode);
-
-        // Track per-type counts for diagnostics
         state.errorCount[errCode] = (state.errorCount[errCode] || 0) + 1;
-        console.error('[SpeakNote] Recognition error:', errCode, '(total:', state.errorCount[errCode] + ')');
+        console.error('[SpeakNote] error:', errCode, 'total:', state.errorCount[errCode],
+                      'consecutive:', state.consecutiveErrors);
 
         if (FATAL_ERRORS.has(errCode)) {
-            updateStatus('error', errCode);
+            const friendly = ERROR_MESSAGES[errCode] || errCode;
             showToast(friendly, 'error');
-            logDiag('Fatal: ' + friendly, true);
-            stopListening();
+            logDiag('Fatal — ' + friendly, true);
+            _haltSession();
             return;
         }
 
-        if (!IGNORABLE_ERRORS.has(errCode)) {
-            state.consecutiveErrors++;
-            updateStatus('error', errCode);
-            logDiag(friendly + ' (attempt ' + state.consecutiveErrors + ')', true);
-            showToast(friendly, 'error');
+        if (IGNORABLE_ERRORS.has(errCode)) {
+            // no-speech / aborted: normal end of a short session, just let onend restart it
+            return;
         }
-        // no-speech / aborted: silent, don't increment counter
+
+        // Countable error (network, bad-grammar, etc.)
+        state.consecutiveErrors++;
+        const friendly = ERROR_MESSAGES[errCode] || ('Unknown error: ' + errCode);
+        const attempt  = state.consecutiveErrors;
+        showToast(friendly, 'error');
 
         if (state.consecutiveErrors >= 5) {
-            logDiag('Too many consecutive errors — stopping. Last error: ' + errCode, true);
-            showToast('Stopped after repeated errors', 'error');
-            stopListening();
+            logDiag('Stopped after 5 consecutive errors. Last: ' + errCode, true);
+            showToast('Stopped — too many errors', 'error');
+            _haltSession();
             return;
         }
 
-        // Schedule a restart from onerror; set flag so onend doesn't also restart
-        if (state.isListening && state.settings.autorestart && !state.restartPending) {
-            state.restartPending = true;
-            var delay = errCode === 'network'
-                ? (NETWORK_BACKOFF[Math.min(state.consecutiveErrors - 1, NETWORK_BACKOFF.length - 1)] || 1000)
-                : 500;
-            if (errCode === 'network') logDiag('Network error — retrying in ' + (delay/1000) + 's…', true);
-            setTimeout(function() {
-                state.restartPending = false;
-                if (state.isListening) safeStart();
-            }, delay);
+        // For network errors, log with backoff delay so user sees what's happening
+        if (errCode === 'network') {
+            const delay = NETWORK_BACKOFF[Math.min(attempt - 1, NETWORK_BACKOFF.length - 1)];
+            logDiag('Network error (attempt ' + attempt + ') — retrying in ' + (delay/1000) + 's', true);
+            // onend will fire after this; we store the delay so onend uses it
+            state.nextRestartDelay = delay;
+        } else {
+            logDiag(friendly + ' (attempt ' + attempt + ')', true);
+            state.nextRestartDelay = 600;
         }
+        // onend fires next and handles the actual restart
     };
 
     recog.onend = function() {
-        console.log('[SpeakNote] Recognition ended. isListening:', state.isListening, 'restartPending:', state.restartPending);
-        // Only restart from onend if onerror hasn't already scheduled one
-        if (state.isListening && state.settings.autorestart && !state.restartPending) {
-            state.restartPending = true;
-            setTimeout(function() {
-                state.restartPending = false;
-                if (state.isListening) safeStart();
-            }, 150);
-        }
+        console.log('[SpeakNote] onend — isListening:', state.isListening);
+        if (!state.isListening) return; // user stopped manually
+
+        // Consume the delay set by onerror (or use short default for clean ends)
+        const delay = state.nextRestartDelay || 80;
+        state.nextRestartDelay = 0;
+
+        setTimeout(function() {
+            if (state.isListening) _startSession();
+        }, delay);
     };
 
-    return true;
+    return recog;
 }
 
-function safeStart() {
-    if (!setupRecog()) return; // fresh instance every time
-    try {
-        state.recognition.start();
-    } catch(e) {
-        console.error('[SpeakNote] safeStart error:', e.name, e.message);
-        logDiag('Could not start microphone: ' + e.message, true);
+function _startSession() {
+    // Tear down any existing instance cleanly before creating a new one
+    if (state.recognition) {
+        try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
+        state.recognition = null;
     }
+    const recog = buildSession();
+    if (!recog) {
+        logDiag('SpeechRecognition not available in this browser.', true);
+        _haltSession();
+        return;
+    }
+    state.recognition = recog;
+    try {
+        recog.start();
+    } catch(e) {
+        console.error('[SpeakNote] start() threw:', e.name, e.message);
+        logDiag('Could not start mic: ' + e.message, true);
+        // Retry after a short pause
+        setTimeout(function() { if (state.isListening) _startSession(); }, 1000);
+    }
+}
+
+function _haltSession() {
+    // Internal stop — does not log a "Stopped" entry (used for fatal/error paths)
+    state.isListening     = false;
+    state.sessionActive   = false;
+    state.nextRestartDelay = 0;
+    if (state.recognition) {
+        try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
+        state.recognition = null;
+    }
+    releaseWakeLock();
+    updateStatus('idle', 'Idle');
+    updateMainBtn();
 }
 
 async function toggleListening() {
     if (state.isListening) {
         stopListening();
     } else {
+        state.isListening     = true;
+        state.consecutiveErrors = 0;
+        state.sessionActive   = false;
+        state.nextRestartDelay = 0;
         await acquireWakeLock();
-        safeStart();
+        _startSession();
     }
 }
 
 function stopListening() {
-    state.isListening    = false;
     state.consecutiveErrors = 0;
-    state.restartPending = false;
-    const recog = state.recognition;
-    state.recognition = null; // null before .stop() so onend guard fires correctly
-    if (recog) try { recog.stop(); } catch(e) { console.warn('[SpeakNote] stop() threw:', e); }
-    releaseWakeLock();
-    updateStatus('idle', 'Idle');
-    updateMainBtn();
+    _haltSession();
     addEntry('system', '⏹ Stopped');
 }
 
