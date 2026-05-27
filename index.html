@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.2</title>
+    <title>SpeakNote v1.2.1</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -317,7 +317,7 @@
     <div class="header">
         <div class="header-left">
             <div class="logo-icon">🎙️</div>
-            <h1>SpeakNote <span class="version">v1.2</span></h1>
+            <h1>SpeakNote <span class="version">v1.2.1</span></h1>
         </div>
         <div class="status idle" id="status">Idle</div>
     </div>
@@ -383,15 +383,17 @@
     <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
 
     <script>
-const APP_VERSION = '1.2';
-const APP_BUILD   = '2026-05-27-1';
+const APP_VERSION = '1.2.1';
+const APP_BUILD   = '2026-05-27-2';
 
 // ── Browser / engine detection ───────────────────────────────────────────────
 const UA = navigator.userAgent;
-const IS_WEBKIT  = /WebKit/.test(UA) && !/Chrome/.test(UA);   // Safari & iOS browsers
-const IS_IOS     = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Edge UA contains 'Chrome' AND 'WebKit' — detect it first, before Chrome
 const IS_EDGE    = /Edg\//.test(UA);
 const IS_CHROME  = /Chrome/.test(UA) && !IS_EDGE;
+// True Safari/WebKit: has WebKit but NOT Chrome/Edge (all Chromium browsers have both)
+const IS_WEBKIT  = /WebKit/.test(UA) && !IS_CHROME && !IS_EDGE;
+const IS_IOS     = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const IS_MOBILE  = IS_IOS || /Android/.test(UA);
 
 // Engine-specific timing constants
@@ -617,7 +619,8 @@ function buildText() {
         .filter(function(e) { return e.type === 'voice' || e.type === 'manual'; })
         .map(function(e) {
             const label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
-            const body  = e.text.split(/?
+            const body  = e.text.split(/
+?
 /).map(function(l) { return '    ' + l; }).join('
 ');
             return e.time + '  ' + label + '
@@ -830,30 +833,46 @@ function _haltSession() {
 }
 
 async function toggleListening() {
-    if (state.isListening) {
-        stopListening();
-    } else {
-        // On iOS, request audio permission proactively before starting recognition
-        // to avoid the first-attempt failure that often happens on WebKit
-        if (IS_IOS && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Immediately release — recognition will re-acquire it
-                stream.getTracks().forEach(function(t) { t.stop(); });
-                await new Promise(function(r) { setTimeout(r, 200); });
-            } catch(e) {
-                showToast('Microphone access denied', 'error');
-                logDiag('getUserMedia denied: ' + e.message, true);
-                return;
-            }
+    try {
+        if (state.isListening) {
+            stopListening();
+            return;
         }
+
+        // Set listening state and update UI immediately so user sees feedback
         state.isListening      = true;
         state.consecutiveErrors = 0;
         state.sessionActive    = false;
         state.nextRestartDelay = 0;
         state.startAttempts    = 0;
-        await acquireWakeLock();
+        updateStatus('listening', 'Starting…');
+        updateMainBtn();
+
+        // iOS only: pre-warm audio permission via getUserMedia before recognition starts.
+        // Skip on Chrome/Edge — getUserMedia is not needed and can cause permission dialogs.
+        if (IS_IOS && !IS_EDGE && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                await new Promise(function(r) { setTimeout(r, 200); });
+            } catch(e) {
+                showToast('Microphone access denied', 'error');
+                logDiag('getUserMedia denied: ' + e.message, true);
+                _haltSession();
+                return;
+            }
+        }
+
+        // Wake lock: best-effort, never block on failure
+        try { await acquireWakeLock(); } catch(e) { console.warn('[SpeakNote] WakeLock skipped:', e); }
+
         _startSession();
+
+    } catch(e) {
+        // Catch-all: if anything above throws, reset state so button is usable again
+        console.error('[SpeakNote] toggleListening error:', e);
+        logDiag('Start failed: ' + e.message, true);
+        _haltSession();
     }
 }
 

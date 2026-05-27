@@ -1,4 +1,4 @@
-const CACHE_NAME = 'speaknote-v1-2-20260527-1';
+const CACHE_NAME = 'speaknote-v1-2-20260527-2';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (e) => {
