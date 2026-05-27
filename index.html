@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.2.1</title>
+    <title>SpeakNote v1.3</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -14,312 +14,231 @@
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="SpeakNote app open on a phone, being used by someone speaking into it">
-
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SpeakNote — Voice Notes, Instantly">
     <meta name="twitter:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export.">
     <meta name="twitter:image" content="og-image.png">
-
-    <!-- General -->
     <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
 
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-    <!-- Inline SVG favicon — no external file needed -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f0f23'/%3E%3Crect x='24' y='8' width='16' height='26' rx='8' fill='%2300d4aa'/%3E%3Cpath d='M16 30c0 8.837 7.163 16 16 16s16-7.163 16-16' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round' fill='none'/%3E%3Cline x1='32' y1='46' x2='32' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='24' y1='54' x2='40' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0c0c1d; --bg2: #13132a; --card: #1a1a35; --card2: #20203e;
-            --accent: #00d4aa; --accent2: #00b894; --accent-glow: rgba(0,212,170,0.18);
-            --warn: #ffd93d; --danger: #ff6b6b; --info: #74b9ff; --text: #e8e8f0; --muted: #7070a0;
-            --border: #28285a; --border2: #32326a;
-            --radius: 12px; --radius-sm: 8px;
+            --bg:#0c0c1d; --bg2:#13132a; --card:#1a1a35; --card2:#20203e;
+            --accent:#00d4aa; --accent2:#00b894; --accent-glow:rgba(0,212,170,0.18);
+            --warn:#ffd93d; --danger:#ff6b6b; --info:#74b9ff;
+            --text:#e8e8f0; --muted:#7070a0; --border:#28285a; --border2:#32326a;
+            --radius:12px; --radius-sm:8px;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            /* Subtle noise texture for depth */
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+        body{
+            font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+            background:var(--bg); color:var(--text);
+            min-height:100vh; display:flex; flex-direction:column;
+            background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
         }
-
-        /* ── Header ── */
-        .header {
-            padding: 14px 18px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(180deg, #16163a 0%, var(--bg2) 100%);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            backdrop-filter: blur(10px);
+        /* Header */
+        .header{
+            padding:14px 18px; display:flex; justify-content:space-between; align-items:center;
+            background:linear-gradient(180deg,#16163a 0%,var(--bg2) 100%);
+            border-bottom:1px solid var(--border);
+            position:sticky; top:0; z-index:100; backdrop-filter:blur(10px);
         }
-        .header-left { display: flex; align-items: center; gap: 10px; }
-        .logo-icon {
-            width: 32px; height: 32px;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 16px;
-            box-shadow: 0 0 12px var(--accent-glow);
-            flex-shrink: 0;
+        .header-left{display:flex;align-items:center;gap:10px;}
+        .logo-icon{
+            width:32px;height:32px;
+            background:linear-gradient(135deg,var(--accent),var(--accent2));
+            border-radius:8px; display:flex; align-items:center; justify-content:center;
+            font-size:16px; box-shadow:0 0 12px var(--accent-glow); flex-shrink:0;
         }
-        .header h1 {
-            font-family: 'DM Mono', monospace;
-            font-size: 16px;
-            font-weight: 500;
-            letter-spacing: -0.3px;
-            color: var(--text);
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .header h1{
+            font-family:'DM Mono',monospace; font-size:16px; font-weight:500;
+            letter-spacing:-0.3px; color:var(--text); display:flex; align-items:center; gap:8px;
         }
-        .version {
-            font-size: 10px; color: var(--accent); font-weight: 500;
-            background: var(--accent-glow); padding: 2px 7px;
-            border-radius: 20px; border: 1px solid rgba(0,212,170,0.25);
-            font-family: 'DM Mono', monospace;
+        .version{
+            font-size:10px; color:var(--accent); font-weight:500;
+            background:var(--accent-glow); padding:2px 7px;
+            border-radius:20px; border:1px solid rgba(0,212,170,0.25);
+            font-family:'DM Mono',monospace;
         }
-        .status {
-            padding: 5px 13px; border-radius: 20px; font-size: 11px;
-            font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;
-            font-family: 'DM Mono', monospace;
-            transition: all 0.3s ease;
+        .header-right{display:flex;align-items:center;gap:8px;}
+        .status{
+            padding:5px 13px; border-radius:20px; font-size:11px;
+            font-weight:600; text-transform:uppercase; letter-spacing:0.8px;
+            font-family:'DM Mono',monospace; transition:all 0.3s ease;
         }
-        .status.idle { background: var(--card2); color: var(--muted); border: 1px solid var(--border2); }
-        .status.listening {
-            background: var(--accent); color: var(--bg);
-            box-shadow: 0 0 16px var(--accent-glow);
-            animation: statusPulse 2s infinite;
+        .status.idle{background:var(--card2);color:var(--muted);border:1px solid var(--border2);}
+        .status.listening{
+            background:var(--accent);color:var(--bg);
+            box-shadow:0 0 16px var(--accent-glow); animation:statusPulse 2s infinite;
         }
-        .status.error { background: var(--danger); color: #fff; }
-        @keyframes statusPulse { 0%,100%{opacity:1; box-shadow: 0 0 16px var(--accent-glow);} 50%{opacity:0.75; box-shadow: 0 0 28px var(--accent-glow);} }
-
-        /* ── Language Bar ── */
-        .lang-bar {
-            display: flex; gap: 6px; padding: 9px 16px;
-            background: var(--bg2);
-            border-bottom: 1px solid var(--border);
-            overflow-x: auto;
+        .status.starting{background:var(--warn);color:#000;}
+        .status.error{background:var(--danger);color:#fff;}
+        @keyframes statusPulse{0%,100%{opacity:1;box-shadow:0 0 16px var(--accent-glow);}50%{opacity:0.75;box-shadow:0 0 28px var(--accent-glow);}}
+        /* Debug toggle button */
+        .debug-btn{
+            width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+            background:var(--card);color:var(--muted);font-size:13px;cursor:pointer;
+            display:flex;align-items:center;justify-content:center;flex-shrink:0;
         }
-        .lang-bar::-webkit-scrollbar { display: none; }
-        .lang-btn {
-            padding: 4px 11px; border-radius: 20px;
-            border: 1px solid var(--border); background: transparent;
-            color: var(--muted); font-size: 11px; font-weight: 600;
-            cursor: pointer; white-space: nowrap;
-            transition: all 0.2s ease;
-            font-family: 'DM Mono', monospace;
+        .debug-btn.active{background:var(--warn);color:#000;border-color:var(--warn);}
+        /* Lang bar */
+        .lang-bar{
+            display:flex;gap:6px;padding:9px 16px;background:var(--bg2);
+            border-bottom:1px solid var(--border);overflow-x:auto;
         }
-        .lang-btn:hover { border-color: var(--border2); color: var(--text); background: var(--card); }
-        .lang-btn.active {
-            background: var(--accent); color: var(--bg);
-            border-color: var(--accent);
-            box-shadow: 0 0 10px var(--accent-glow);
+        .lang-bar::-webkit-scrollbar{display:none;}
+        .lang-btn{
+            padding:4px 11px;border-radius:20px;border:1px solid var(--border);
+            background:transparent;color:var(--muted);font-size:11px;font-weight:600;
+            cursor:pointer;white-space:nowrap;transition:all 0.2s ease;
+            font-family:'DM Mono',monospace;
         }
-
-        /* ── Controls ── */
-        .controls {
-            background: var(--bg2);
-            border-bottom: 1px solid var(--border);
-            padding: 14px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+        .lang-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card);}
+        .lang-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);box-shadow:0 0 10px var(--accent-glow);}
+        /* Controls */
+        .controls{
+            background:var(--bg2);border-bottom:1px solid var(--border);
+            padding:14px 16px;display:flex;flex-direction:column;gap:10px;
         }
-        .main-btn {
-            width: 100%; padding: 16px; border-radius: var(--radius);
-            border: none; font-size: 15px; font-weight: 700; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            text-transform: uppercase; letter-spacing: 1px;
-            font-family: 'DM Mono', monospace;
-            transition: all 0.2s ease;
-            position: relative;
-            overflow: hidden;
+        .main-btn{
+            width:100%;padding:16px;border-radius:var(--radius);border:none;
+            font-size:15px;font-weight:700;cursor:pointer;
+            display:flex;align-items:center;justify-content:center;gap:10px;
+            text-transform:uppercase;letter-spacing:1px;
+            font-family:'DM Mono',monospace;transition:all 0.2s ease;
+            position:relative;overflow:hidden;
         }
-        .main-btn::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: rgba(255,255,255,0);
-            transition: background 0.15s;
+        .main-btn::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,0);transition:background 0.15s;}
+        .main-btn:active::after{background:rgba(255,255,255,0.1);}
+        .main-btn.start{background:linear-gradient(135deg,var(--accent) 0%,var(--accent2) 100%);color:var(--bg);box-shadow:0 4px 24px rgba(0,212,170,0.25);}
+        .main-btn.start:hover{box-shadow:0 4px 32px rgba(0,212,170,0.4);transform:translateY(-1px);}
+        .main-btn.stop{background:linear-gradient(135deg,#ff6b6b 0%,#ee5252 100%);color:#fff;box-shadow:0 4px 24px rgba(255,107,107,0.25);}
+        .main-btn.stop:hover{box-shadow:0 4px 32px rgba(255,107,107,0.4);transform:translateY(-1px);}
+        .secondary{display:flex;gap:6px;}
+        .sec-btn{
+            flex:1;padding:10px 4px;border-radius:var(--radius-sm);
+            border:1px solid var(--border);background:var(--card);color:var(--muted);
+            font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Mono',monospace;
+            transition:all 0.18s ease;display:flex;flex-direction:column;align-items:center;gap:3px;
         }
-        .main-btn:active::after { background: rgba(255,255,255,0.1); }
-        .main-btn.start {
-            background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-            color: var(--bg);
-            box-shadow: 0 4px 24px rgba(0,212,170,0.25);
+        .sec-btn .sec-icon{font-size:15px;}
+        .sec-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card2);}
+        .sec-btn:active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);transform:scale(0.97);}
+        /* Debug panel */
+        .debug-panel{
+            background:#0a0a18;border-bottom:1px solid var(--border);
+            padding:10px 14px;display:none;max-height:180px;overflow-y:auto;
         }
-        .main-btn.start:hover { box-shadow: 0 4px 32px rgba(0,212,170,0.4); transform: translateY(-1px); }
-        .main-btn.stop {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5252 100%);
-            color: #fff;
-            box-shadow: 0 4px 24px rgba(255,107,107,0.25);
+        .debug-panel.show{display:block;}
+        .debug-panel-header{
+            display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
         }
-        .main-btn.stop:hover { box-shadow: 0 4px 32px rgba(255,107,107,0.4); transform: translateY(-1px); }
-        .btn-dot {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: currentColor;
-            animation: none;
+        .debug-panel-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--warn);font-family:'DM Mono',monospace;font-weight:600;}
+        .debug-clear{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;}
+        .debug-log{list-style:none;}
+        .debug-log li{
+            font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);
+            padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);
+            line-height:1.5;word-break:break-all;
         }
-        .main-btn.stop .btn-dot { animation: recDot 1s infinite; }
-        @keyframes recDot { 0%,100%{opacity:1} 50%{opacity:0.2} }
-
-        .secondary { display: flex; gap: 6px; }
-        .sec-btn {
-            flex: 1; padding: 10px 4px; border-radius: var(--radius-sm);
-            border: 1px solid var(--border); background: var(--card); color: var(--muted);
-            font-size: 11px; font-weight: 600; cursor: pointer;
-            font-family: 'DM Mono', monospace;
-            transition: all 0.18s ease;
-            display: flex; flex-direction: column; align-items: center; gap: 3px;
+        .debug-log li.err{color:#ff9999;}
+        .debug-log li.ok{color:#99ffcc;}
+        .debug-log li.warn{color:var(--warn);}
+        .debug-log li.info{color:var(--info);}
+        /* Notes */
+        .notes{flex:1;background:var(--bg);padding:14px 16px;overflow-y:auto;min-height:100px;}
+        .notes-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+        .notes-title{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-family:'DM Mono',monospace;font-weight:500;}
+        .note-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);background:var(--card);padding:2px 8px;border-radius:20px;border:1px solid var(--border);}
+        .notes-actions button{
+            padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);
+            background:var(--card);color:var(--muted);font-size:11px;font-weight:600;
+            cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.18s;
         }
-        .sec-btn .sec-icon { font-size: 15px; }
-        .sec-btn:hover { border-color: var(--border2); color: var(--text); background: var(--card2); }
-        .sec-btn:active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); transform: scale(0.97); }
-
-        /* ── Notes Area ── */
-        .notes {
-            flex: 1; background: var(--bg);
-            padding: 14px 16px; overflow-y: auto; min-height: 100px;
+        .notes-actions button:hover{border-color:var(--danger);color:var(--danger);}
+        /* Entries */
+        .entry{
+            padding:10px 14px;background:var(--card);border-radius:var(--radius);
+            margin-bottom:7px;border:1px solid var(--border);transition:border-color 0.2s;
+            animation:entryIn 0.25s ease-out both;
         }
-        .notes-header {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
-        }
-        .notes-title {
-            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
-            color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;
-        }
-        .note-count {
-            font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted);
-            background: var(--card); padding: 2px 8px; border-radius: 20px;
-            border: 1px solid var(--border);
-        }
-        .notes-actions { display: flex; gap: 6px; }
-        .notes-actions button {
-            padding: 4px 10px; border-radius: var(--radius-sm);
-            border: 1px solid var(--border); background: var(--card); color: var(--muted);
-            font-size: 11px; font-weight: 600; cursor: pointer;
-            font-family: 'DM Mono', monospace;
-            transition: all 0.18s;
-        }
-        .notes-actions button:hover { border-color: var(--danger); color: var(--danger); }
-        .notes-actions button:active { background: rgba(255,107,107,0.1); }
-
-        /* ── Entries ── */
-        .entry {
-            padding: 10px 14px; background: var(--card); border-radius: var(--radius);
-            margin-bottom: 7px; border: 1px solid var(--border);
-            transition: border-color 0.2s;
-            animation: entryIn 0.25s ease-out both;
-        }
-        @keyframes entryIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-        .entry:hover { border-color: var(--border2); }
-        .entry-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-        .entry-time { color: var(--muted); font-size: 10px; font-family: 'DM Mono', monospace; }
-        .entry-badge {
-            font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
-            text-transform: uppercase; letter-spacing: 0.8px; font-family: 'DM Mono', monospace;
-        }
-        .badge-voice { background: rgba(0,212,170,0.15); color: var(--accent); border: 1px solid rgba(0,212,170,0.25); }
-        .badge-note { background: rgba(255,217,61,0.12); color: var(--warn); border: 1px solid rgba(255,217,61,0.2); }
-        .entry-text { font-size: 14px; line-height: 1.6; color: var(--text); word-break: break-word; }
-        .entry textarea {
-            width: 100%; background: transparent; border: none; color: var(--text);
-            font-size: 14px; line-height: 1.6; resize: none; outline: none;
-            font-family: 'DM Sans', sans-serif;
-        }
-        .entry.voice-entry { border-left: 2px solid var(--accent); }
-        .entry.manual-entry { border-left: 2px solid rgba(255,217,61,0.4); }
-        .entry.system-entry { border-left: 2px solid rgba(112,112,160,0.35); opacity: 0.65; }
-        .entry.system-entry .entry-text { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--muted); }
-        .badge-system { background: rgba(112,112,160,0.12); color: var(--muted); border: 1px solid rgba(112,112,160,0.2); }
-
+        @keyframes entryIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+        .entry:hover{border-color:var(--border2);}
+        .entry-meta{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+        .entry-time{color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;}
+        .entry-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.8px;font-family:'DM Mono',monospace;}
+        .badge-voice{background:rgba(0,212,170,0.15);color:var(--accent);border:1px solid rgba(0,212,170,0.25);}
+        .badge-note{background:rgba(255,217,61,0.12);color:var(--warn);border:1px solid rgba(255,217,61,0.2);}
+        .badge-system{background:rgba(112,112,160,0.12);color:var(--muted);border:1px solid rgba(112,112,160,0.2);}
+        .entry-text{font-size:14px;line-height:1.6;color:var(--text);word-break:break-word;}
+        .entry textarea{width:100%;background:transparent;border:none;color:var(--text);font-size:14px;line-height:1.6;resize:none;outline:none;font-family:'DM Sans',sans-serif;}
+        .entry.voice-entry{border-left:2px solid var(--accent);}
+        .entry.manual-entry{border-left:2px solid rgba(255,217,61,0.4);}
+        .entry.system-entry{border-left:2px solid rgba(112,112,160,0.35);opacity:0.7;}
+        .entry.system-entry .entry-text{font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);}
         /* Empty state */
-        .empty-state {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 40px 20px; color: var(--muted); text-align: center; gap: 10px;
+        .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:var(--muted);text-align:center;gap:10px;}
+        .empty-icon{font-size:36px;opacity:0.4;}
+        .empty-text{font-size:13px;font-family:'DM Mono',monospace;opacity:0.6;}
+        /* Toast */
+        .toast{
+            position:fixed;bottom:110px;left:50%;
+            transform:translateX(-50%) translateY(16px);
+            background:var(--card2);color:var(--text);
+            padding:11px 22px;border-radius:22px;font-size:13px;font-weight:600;
+            box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid var(--border2);
+            opacity:0;transition:all 0.28s cubic-bezier(0.34,1.56,0.64,1);
+            z-index:2000;pointer-events:none;max-width:90vw;
+            font-family:'DM Mono',monospace;display:flex;align-items:center;gap:8px;
         }
-        .empty-icon { font-size: 36px; opacity: 0.4; }
-        .empty-text { font-size: 13px; font-family: 'DM Mono', monospace; opacity: 0.6; }
-
-        /* ── Toast ── */
-        .toast {
-            position: fixed; bottom: 110px; left: 50%;
-            transform: translateX(-50%) translateY(16px);
-            background: var(--card2); color: var(--text);
-            padding: 11px 22px; border-radius: 22px;
-            font-size: 13px; font-weight: 600;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border: 1px solid var(--border2);
-            opacity: 0; transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 2000; pointer-events: none; max-width: 90vw;
-            font-family: 'DM Mono', monospace;
-            display: flex; align-items: center; gap: 8px;
+        .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+        .toast.success::before{content:'✓';color:var(--accent);}
+        .toast.error::before{content:'✕';color:var(--danger);}
+        /* Install banner */
+        .install-banner{
+            position:fixed;bottom:0;left:0;right:0;
+            background:linear-gradient(135deg,var(--accent),var(--accent2));
+            color:var(--bg);padding:14px 20px;
+            display:flex;justify-content:space-between;align-items:center;
+            z-index:3000;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.34,1.36,0.64,1);
         }
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-        .toast.success::before { content: '✓'; color: var(--accent); }
-        .toast.error::before { content: '✕'; color: var(--danger); }
-
-        /* ── Install Banner ── */
-        .install-banner {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            color: var(--bg); padding: 14px 20px;
-            display: flex; justify-content: space-between; align-items: center;
-            z-index: 3000; transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.34, 1.36, 0.64, 1);
-        }
-        .install-banner.show { transform: translateY(0); }
-        .install-banner-left { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
-        .install-banner button {
-            background: var(--bg); color: var(--accent); border: none;
-            padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer;
-            font-family: 'DM Mono', monospace; font-size: 12px;
-        }
-        .install-dismiss {
-            background: transparent !important; color: rgba(0,0,0,0.4) !important;
-            padding: 4px 8px !important; font-size: 18px !important;
-        }
-
-        /* Waveform animation shown when listening */
-        .waveform { display: none; align-items: center; gap: 3px; height: 18px; }
-        .waveform.active { display: flex; }
-        .waveform span {
-            display: block; width: 3px; border-radius: 2px;
-            background: var(--accent); height: 4px;
-        }
-        .waveform span:nth-child(1) { animation: wave 1s ease-in-out infinite 0.0s; }
-        .waveform span:nth-child(2) { animation: wave 1s ease-in-out infinite 0.15s; }
-        .waveform span:nth-child(3) { animation: wave 1s ease-in-out infinite 0.3s; }
-        .waveform span:nth-child(4) { animation: wave 1s ease-in-out infinite 0.45s; }
-        .waveform span:nth-child(5) { animation: wave 1s ease-in-out infinite 0.6s; }
-        @keyframes wave { 0%,100%{height:4px} 50%{height:16px} }
-
-        #no-sleep { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-
-        /* Scrollbar */
-        .notes::-webkit-scrollbar { width: 4px; }
-        .notes::-webkit-scrollbar-track { background: transparent; }
-        .notes::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+        .install-banner.show{transform:translateY(0);}
+        .install-banner button{background:var(--bg);color:var(--accent);border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;}
+        .install-dismiss{background:transparent!important;color:rgba(0,0,0,0.4)!important;padding:4px 8px!important;font-size:18px!important;}
+        /* Waveform */
+        .waveform{display:none;align-items:center;gap:3px;height:18px;}
+        .waveform.active{display:flex;}
+        .waveform span{display:block;width:3px;border-radius:2px;background:var(--accent);height:4px;}
+        .waveform span:nth-child(1){animation:wave 1s ease-in-out infinite 0.0s;}
+        .waveform span:nth-child(2){animation:wave 1s ease-in-out infinite 0.15s;}
+        .waveform span:nth-child(3){animation:wave 1s ease-in-out infinite 0.3s;}
+        .waveform span:nth-child(4){animation:wave 1s ease-in-out infinite 0.45s;}
+        .waveform span:nth-child(5){animation:wave 1s ease-in-out infinite 0.6s;}
+        @keyframes wave{0%,100%{height:4px}50%{height:16px}}
+        #no-sleep{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;}
+        .notes::-webkit-scrollbar{width:4px;}
+        .notes::-webkit-scrollbar-track{background:transparent;}
+        .notes::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+        .debug-panel::-webkit-scrollbar{width:3px;}
+        .debug-panel::-webkit-scrollbar-thumb{background:var(--border2);}
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-left">
             <div class="logo-icon">🎙️</div>
-            <h1>SpeakNote <span class="version">v1.2.1</span></h1>
+            <h1>SpeakNote <span class="version">v1.3</span></h1>
         </div>
-        <div class="status idle" id="status">Idle</div>
+        <div class="header-right">
+            <button class="debug-btn" id="debug-btn" onclick="toggleDebug()" title="Debug log">🐛</button>
+            <div class="status idle" id="status">Idle</div>
+        </div>
     </div>
 
     <div class="lang-bar" id="lang-bar">
@@ -342,19 +261,20 @@
             <span id="btn-text">Start Recording</span>
         </button>
         <div class="secondary">
-            <button class="sec-btn" onclick="addManualNote()">
-                <span class="sec-icon">✎</span><span>Note</span>
-            </button>
-            <button class="sec-btn" onclick="undoLast()">
-                <span class="sec-icon">↩</span><span>Undo</span>
-            </button>
-            <button class="sec-btn" onclick="copyToClipboard()">
-                <span class="sec-icon">📋</span><span>Copy</span>
-            </button>
-            <button class="sec-btn" onclick="exportText()">
-                <span class="sec-icon">⬇</span><span>Export</span>
-            </button>
+            <button class="sec-btn" onclick="addManualNote()"><span class="sec-icon">✎</span><span>Note</span></button>
+            <button class="sec-btn" onclick="undoLast()"><span class="sec-icon">↩</span><span>Undo</span></button>
+            <button class="sec-btn" onclick="copyToClipboard()"><span class="sec-icon">📋</span><span>Copy</span></button>
+            <button class="sec-btn" onclick="exportText()"><span class="sec-icon">⬇</span><span>Export</span></button>
         </div>
+    </div>
+
+    <!-- On-screen debug panel — toggle with 🐛 button -->
+    <div class="debug-panel" id="debug-panel">
+        <div class="debug-panel-header">
+            <span class="debug-panel-title">🐛 Debug Log</span>
+            <button class="debug-clear" onclick="clearDebugLog()">Clear</button>
+        </div>
+        <ul class="debug-log" id="debug-log"></ul>
     </div>
 
     <div class="notes" id="notes">
@@ -373,171 +293,221 @@
 
     <div class="toast" id="toast"></div>
     <div class="install-banner" id="install-banner">
-        <div class="install-banner-left">📲 Install SpeakNote for offline use</div>
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;">📲 Install SpeakNote for offline use</div>
         <div style="display:flex;gap:6px;align-items:center">
             <button onclick="installPWA()">Install</button>
             <button class="install-dismiss" onclick="document.getElementById('install-banner').classList.remove('show')">✕</button>
         </div>
     </div>
 
-    <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
+    <video id="no-sleep" loop muted playsinline>
+        <source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4">
+    </video>
 
     <script>
-const APP_VERSION = '1.2.1';
-const APP_BUILD   = '2026-05-27-2';
+// ═══════════════════════════════════════════════════════════════════════════════
+// SpeakNote v1.3
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const APP_VERSION = '1.3';
+const APP_BUILD   = '2026-05-27-3';
+
+// ── Debug logger — logs to console AND on-screen panel ───────────────────────
+var debugLines = [];
+function dbg(msg, level) {
+    // level: 'info'|'ok'|'warn'|'err' (default 'info')
+    var lvl   = level || 'info';
+    var ts    = new Date().toLocaleTimeString('en-US', {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var line  = ts + ' [' + lvl.toUpperCase() + '] ' + msg;
+    debugLines.push({line:line, lvl:lvl});
+    if (debugLines.length > 200) debugLines.shift();
+    // Console
+    if (lvl === 'err')  console.error('[SN]', msg);
+    else if (lvl === 'warn') console.warn('[SN]', msg);
+    else console.log('[SN]', msg);
+    // On-screen panel
+    var ul = document.getElementById('debug-log');
+    if (ul) {
+        var li = document.createElement('li');
+        li.className = lvl;
+        li.textContent = line;
+        ul.insertBefore(li, ul.firstChild);
+        // Cap DOM to 100 lines
+        while (ul.children.length > 100) ul.removeChild(ul.lastChild);
+    }
+}
+function toggleDebug() {
+    var panel = document.getElementById('debug-panel');
+    var btn   = document.getElementById('debug-btn');
+    var show  = !panel.classList.contains('show');
+    panel.classList.toggle('show', show);
+    btn.classList.toggle('active', show);
+}
+function clearDebugLog() {
+    debugLines = [];
+    var ul = document.getElementById('debug-log');
+    if (ul) ul.innerHTML = '';
+}
 
 // ── Browser / engine detection ───────────────────────────────────────────────
-const UA = navigator.userAgent;
-// Edge UA contains 'Chrome' AND 'WebKit' — detect it first, before Chrome
-const IS_EDGE    = /Edg\//.test(UA);
-const IS_CHROME  = /Chrome/.test(UA) && !IS_EDGE;
-// True Safari/WebKit: has WebKit but NOT Chrome/Edge (all Chromium browsers have both)
-const IS_WEBKIT  = /WebKit/.test(UA) && !IS_CHROME && !IS_EDGE;
-const IS_IOS     = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const IS_MOBILE  = IS_IOS || /Android/.test(UA);
+// NOTE: Order matters — Edge UA contains 'Chrome' AND 'WebKit', detect first.
+var UA       = navigator.userAgent;
+var IS_EDGE  = /Edg\//.test(UA);
+var IS_CHROME= /Chrome/.test(UA) && !IS_EDGE;
+// True Safari/WebKit: WebKit present but NOT Chromium-based
+var IS_WEBKIT= /WebKit/.test(UA) && !IS_CHROME && !IS_EDGE;
+var IS_IOS   = /iPad|iPhone|iPod/.test(UA) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+var IS_MOBILE= IS_IOS || /Android/.test(UA);
+// Protocol check — SpeechRecognition requires HTTPS or localhost on most browsers
+var IS_SECURE = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+var ENGINE = IS_IOS ? 'iOS-WebKit' : IS_WEBKIT ? 'WebKit' : IS_EDGE ? 'Edge' : IS_CHROME ? 'Chrome' : 'Other';
 
-// Engine-specific timing constants
-// iOS WebKit needs more breathing room between sessions for audio session re-acquisition
-// Edge on desktop is similar to Chrome; Edge on iOS is WebKit underneath
-const TIMING = IS_IOS ? {
-    restartDelay:      600,   // ms between sessions (WebKit audio session re-acquire)
-    networkBase:      2000,   // first network retry delay
-    networkBackoff:   [2000, 4000, 8000, 16000],
-    maxErrors:           4
+// ── Engine-tuned timing ───────────────────────────────────────────────────────
+// iOS WebKit needs longer delays for audio session handoff between short sessions.
+var TIMING = IS_IOS ? {
+    restartDelay:    700,
+    networkBackoff:  [2000, 4000, 8000, 16000],
+    maxErrors:       4
 } : {
-    restartDelay:       80,
-    networkBase:      1000,
-    networkBackoff:   [1000, 2000, 4000, 8000],
-    maxErrors:           5
+    restartDelay:    120,
+    networkBackoff:  [1000, 2000, 4000, 8000],
+    maxErrors:       5
 };
 
-console.log('[SpeakNote] Engine:', IS_IOS ? 'iOS-WebKit' : IS_WEBKIT ? 'WebKit' : IS_EDGE ? 'Edge' : IS_CHROME ? 'Chrome' : 'Other',
-            '| Mobile:', IS_MOBILE, '| Build:', APP_BUILD);
-
-// ── Language map ─────────────────────────────────────────────────────────────
-const LANG_NAMES = {
-    'en-US': 'English', 'es-ES': 'Español', 'fr-FR': 'Français', 'de-DE': 'Deutsch',
-    'it-IT': 'Italiano', 'pt-BR': 'Português', 'ja-JP': '日本語', 'ko-KR': '한국어',
-    'zh-CN': '中文', 'nl-NL': 'Nederlands'
+// ── Language map ──────────────────────────────────────────────────────────────
+var LANG_NAMES = {
+    'en-US':'English','es-ES':'Español','fr-FR':'Français','de-DE':'Deutsch',
+    'it-IT':'Italiano','pt-BR':'Português','ja-JP':'日本語','ko-KR':'한국어',
+    'zh-CN':'中文','nl-NL':'Nederlands'
 };
 
-// ── Error taxonomy ───────────────────────────────────────────────────────────
-const ERROR_MESSAGES = {
-    'network':               'Network error — speech service unreachable.',
-    'not-allowed':           'Microphone access denied. Allow mic in browser settings.',
-    'no-speech':             'No speech detected.',
-    'aborted':               'Session aborted.',
-    'audio-capture':         'No microphone found or mic is in use by another app.',
-    'service-not-allowed':   'Speech service blocked. Try a different browser.',
-    'bad-grammar':           'Speech grammar error.',
-    'language-not-supported':'Selected language not supported by this browser.'
+// ── Error taxonomy ────────────────────────────────────────────────────────────
+var ERROR_MSG = {
+    'network':              'Network error — speech service unreachable.',
+    'not-allowed':          'Microphone access denied. Allow mic in browser settings.',
+    'no-speech':            'No speech detected.',
+    'aborted':              'Session aborted.',
+    'audio-capture':        'No microphone found, or mic in use by another app.',
+    'service-not-allowed':  'Speech service blocked. Try HTTPS or a different browser.',
+    'bad-grammar':          'Speech grammar error.',
+    'language-not-supported':'Language not supported by this browser.'
+};
+// These are normal short-session endings — ignore silently
+var IGNORABLE = {no_speech: true, 'no-speech': true, aborted: true};
+// These require stopping — no retry possible
+var FATAL = {'not-allowed': true, 'service-not-allowed': true, 'audio-capture': true};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+var state = {
+    entries:          [],
+    isListening:      false,
+    recognition:      null,
+    wakeLock:         null,
+    settings:         {lang: 'en-US'},
+    consecutiveErrors:0,
+    lastCmdTime:      0,
+    errorCount:       {},
+    sessionLogged:    false,   // true once "Mic active" entry logged for this user session
+    nextRestartDelay: 0,       // ms: delay for onend restart (set by onerror)
+    startAttempts:    0,       // rapid-start-fail guard counter
+    guardTimer:       null     // timeout handle for restart scheduling
+};
+var deferredPrompt = null;
+
+var els = {
+    status:    document.getElementById('status'),
+    mainBtn:   document.getElementById('main-btn'),
+    btnIcon:   document.getElementById('btn-icon'),
+    btnText:   document.getElementById('btn-text'),
+    notes:     document.getElementById('notes'),
+    toast:     document.getElementById('toast'),
+    noSleep:   document.getElementById('no-sleep'),
+    waveform:  document.getElementById('waveform'),
+    noteCount: document.getElementById('note-count'),
+    emptyState:document.getElementById('empty-state')
 };
 
-// no-speech and aborted are normal short-session endings — don't count or log them
-const IGNORABLE_ERRORS = new Set(['no-speech', 'aborted']);
-
-// Fatal — no retry makes sense
-const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
-
-// ── State ────────────────────────────────────────────────────────────────────
-let state = {
-    entries: [], isListening: false, recognition: null, wakeLock: null,
-    settings: { autorestart: true, lang: 'en-US' },
-    consecutiveErrors: 0, lastCmdTime: 0,
-    errorCount: {},
-    sessionActive:    false,   // true once mic-active entry logged for this user session
-    nextRestartDelay: 0,       // delay onend should use (set by onerror)
-    startAttempts:    0        // guard against rapid start-fail loops
-};
-let deferredPrompt = null;
-
-const els = {
-    status:     document.getElementById('status'),
-    mainBtn:    document.getElementById('main-btn'),
-    btnIcon:    document.getElementById('btn-icon'),
-    btnText:    document.getElementById('btn-text'),
-    notes:      document.getElementById('notes'),
-    toast:      document.getElementById('toast'),
-    noSleep:    document.getElementById('no-sleep'),
-    waveform:   document.getElementById('waveform'),
-    noteCount:  document.getElementById('note-count'),
-    emptyState: document.getElementById('empty-state'),
-};
-
-// ── Diagnostics ──────────────────────────────────────────────────────────────
-function logDiag(msg, isError) {
-    console[isError ? 'error' : 'log']('[SpeakNote]', msg);
-    addEntry('system', (isError ? '⚠️' : 'ℹ️') + ' ' + msg);
-}
-
-// ── Init ─────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
-    loadSettings();
+    dbg('v' + APP_VERSION + ' build ' + APP_BUILD, 'info');
+    dbg('Engine: ' + ENGINE + ' | iOS: ' + IS_IOS + ' | Mobile: ' + IS_MOBILE + ' | Secure: ' + IS_SECURE, 'info');
+    dbg('UA: ' + UA.slice(0, 120), 'info');
+
+    // Protocol warning
+    if (!IS_SECURE) {
+        dbg('WARNING: page served over ' + location.protocol + ' — SpeechRecognition requires HTTPS or localhost!', 'warn');
+        addEntry('system', '⚠️ SpeechRecognition requires HTTPS. Running over ' + location.protocol + ' may not work.');
+    }
+
+    // SpeechRecognition support check
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+        dbg('SpeechRecognition API: available (' + (window.SpeechRecognition ? 'unprefixed' : 'webkit-prefixed') + ')', 'ok');
+    } else {
+        dbg('SpeechRecognition API: NOT AVAILABLE in this browser', 'err');
+        addEntry('system', '⚠️ Speech recognition not supported in this browser.');
+    }
+
+    loadSettings();     // loads lang, does NOT show a toast
     setupInstall();
     setupVisibilityHandler();
+
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js')
-            .then(function() { console.log('[SpeakNote] SW registered'); })
-            .catch(function(e) { console.warn('[SpeakNote] SW failed:', e); });
+            .then(function() { dbg('SW registered', 'ok'); })
+            .catch(function(e) { dbg('SW failed: ' + e.message, 'warn'); });
     }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) logDiag('Speech recognition not supported in this browser.', true);
 }
 
-// ── Visibility handler — pause/resume on tab hide/show ───────────────────────
-// iOS and mobile browsers suspend audio sessions when the tab is hidden.
-// We stop cleanly on hide and offer to resume on show.
+// ── Visibility: pause/resume when tab hides (mobile background) ───────────────
 function setupVisibilityHandler() {
     document.addEventListener('visibilitychange', function() {
         if (document.hidden && state.isListening) {
-            console.log('[SpeakNote] Tab hidden — suspending session');
-            // Soft-suspend: keep isListening=true but abort the recognition
-            // so iOS releases the audio session properly
-            if (state.recognition) {
-                try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
-                state.recognition = null;
-            }
-            updateStatus('listening', 'Paused');
+            dbg('Tab hidden — soft-suspending recognition', 'warn');
+            _abortCurrentRecog();
+            updateStatus('starting', 'Paused');
         } else if (!document.hidden && state.isListening) {
-            console.log('[SpeakNote] Tab visible — resuming session');
-            // Resume after a delay so the audio system wakes back up
-            setTimeout(function() {
+            dbg('Tab visible — resuming after ' + (IS_IOS ? 1200 : 500) + 'ms', 'info');
+            clearTimeout(state.guardTimer);
+            state.guardTimer = setTimeout(function() {
                 if (state.isListening) _startSession();
-            }, IS_IOS ? 1200 : 400);
+            }, IS_IOS ? 1200 : 500);
         }
     });
 }
 
-// ── Language ─────────────────────────────────────────────────────────────────
+// ── Language ──────────────────────────────────────────────────────────────────
 function setLang(lang) {
     state.settings.lang = lang;
     document.querySelectorAll('.lang-btn').forEach(function(b) {
         b.classList.toggle('active', b.dataset.lang === lang);
     });
     saveSettings();
-    showToast('Language: ' + LANG_NAMES[lang], 'success');
+    // Only show toast if user clicked (not on init)
+    if (state._langInitDone) showToast('Language: ' + LANG_NAMES[lang], 'success');
+    dbg('Language set: ' + lang, 'info');
     if (state.isListening) {
-        if (state.recognition) {
-            try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
-            state.recognition = null;
-        }
-        state.sessionActive = false; // log new language on restart
-        setTimeout(function() { if (state.isListening) _startSession(); },
-                   IS_IOS ? 800 : 300);
+        dbg('Restarting session for new language', 'info');
+        _abortCurrentRecog();
+        state.sessionLogged = false;
+        clearTimeout(state.guardTimer);
+        state.guardTimer = setTimeout(function() {
+            if (state.isListening) _startSession();
+        }, IS_IOS ? 800 : 300);
     }
 }
 
-// ── Entry count ───────────────────────────────────────────────────────────────
+// ── Entry management ──────────────────────────────────────────────────────────
 function updateEntryCount() {
-    const n = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
+    var n = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
     els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
     els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
 }
 
-// ── Entries ───────────────────────────────────────────────────────────────────
 function addEntry(type, text, editable) {
-    const time  = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const entry = { type: type, text: text, time: time, ts: Date.now(), editable: !!editable };
+    var time  = new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    var entry = {type:type, text:text, time:time, ts:Date.now(), editable:!!editable};
     state.entries.unshift(entry);
     renderEntry(entry, true);
     while (state.entries.length > 200) {
@@ -549,58 +519,61 @@ function addEntry(type, text, editable) {
 }
 
 function renderEntry(entry, prepend) {
-    const div      = document.createElement('div');
-    const isVoice  = entry.type === 'voice';
-    const isManual = entry.type === 'manual';
-    const isSystem = entry.type === 'system';
-    div.className  = 'entry' +
+    var div      = document.createElement('div');
+    var isVoice  = entry.type === 'voice';
+    var isManual = entry.type === 'manual';
+    var isSystem = entry.type === 'system';
+    div.className = 'entry' +
         (isVoice  ? ' voice-entry'  : '') +
         (isManual ? ' manual-entry' : '') +
         (isSystem ? ' system-entry' : '');
     div.dataset.ts = String(entry.ts);
 
-    const badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : isSystem ? 'System' : '';
-    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : 'badge-system';
-    const badgeHtml  = badgeLabel
+    var badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : isSystem ? 'System' : '';
+    var badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : 'badge-system';
+    var badgeHtml  = badgeLabel
         ? '<span class="entry-badge ' + badgeClass + '">' + badgeLabel + '</span>'
         : '';
 
     if (entry.editable) {
-        div.innerHTML = '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+        div.innerHTML =
+            '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
             '<textarea rows="1" oninput="autoResize(this);updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
     } else {
-        div.innerHTML = '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+        div.innerHTML =
+            '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
             '<div class="entry-text">' + escapeHtml(entry.text) + '</div>';
     }
 
-    const header = els.notes.querySelector('.notes-header');
+    var header = els.notes.querySelector('.notes-header');
     if (prepend && header && header.nextSibling) els.notes.insertBefore(div, header.nextSibling);
     else els.notes.appendChild(div);
 
     if (entry.editable) {
-        const ta = div.querySelector('textarea');
+        var ta = div.querySelector('textarea');
         autoResize(ta);
-        // Delay focus on iOS to avoid keyboard fighting with audio session
-        setTimeout(function() { ta.focus(); }, IS_IOS ? 300 : 0);
+        setTimeout(function() { ta.focus(); }, IS_IOS ? 350 : 0);
     }
 }
 
 function autoResize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 
 function updateEntry(ta) {
-    const ts = Number(ta.closest('.entry').dataset.ts);
+    var entryEl = ta.closest('.entry');
+    if (!entryEl) return;
+    var ts = Number(entryEl.dataset.ts);
     if (!ts) return;
-    const e = state.entries.find(function(x) { return x.ts === ts; });
+    var e = state.entries.find(function(x) { return x.ts === ts; });
     if (e) e.text = ta.value;
 }
 
-function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function escapeHtml(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function addManualNote() { addEntry('manual', '', true); }
 
 function undoLast() {
-    if (state.entries.length === 0) { showToast('Nothing to undo', 'error'); return; }
+    if (!state.entries.length) { showToast('Nothing to undo', 'error'); return; }
     state.entries.shift();
-    const first = els.notes.querySelector('.entry');
+    var first = els.notes.querySelector('.entry');
     if (first) first.remove();
     showToast('Undone', 'success');
     updateEntryCount();
@@ -615,32 +588,32 @@ function clearNotes() {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 function buildText() {
-    return state.entries.slice().reverse()
-        .filter(function(e) { return e.type === 'voice' || e.type === 'manual'; })
-        .map(function(e) {
-            const label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
-            const body  = e.text.split(/
-?
-/).map(function(l) { return '    ' + l; }).join('
-');
-            return e.time + '  ' + label + '
-' + body;
-        }).join('
-
-');
+    var lines = [];
+    var exportable = state.entries.slice().reverse().filter(function(e) {
+        return e.type === 'voice' || e.type === 'manual';
+    });
+    for (var i = 0; i < exportable.length; i++) {
+        var e = exportable[i];
+        var label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
+        // Split on real newlines, indent each line
+        var bodyLines = e.text.split('\n');
+        var body = bodyLines.map(function(l) { return '    ' + l; }).join('\n');
+        lines.push(e.time + '  ' + label + '\n' + body);
+    }
+    return lines.join('\n\n');
 }
 
 function copyToClipboard() {
-    const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    var exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
     if (!exportable.length) { showToast('No notes to copy', 'error'); return; }
-    const text = buildText();
+    var text = buildText();
     function fallback() {
-        const ta = document.createElement('textarea');
+        var ta = document.createElement('textarea');
         ta.value = text;
         ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
         document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, text.length);
-        try { const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; }
-        catch(e) { document.body.removeChild(ta); return false; }
+        try { var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; }
+        catch(e2) { document.body.removeChild(ta); return false; }
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
@@ -652,29 +625,35 @@ function copyToClipboard() {
 }
 
 function exportText() {
-    const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    var exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
     if (!exportable.length) { showToast('No notes to export', 'error'); return; }
-    const text = buildText();
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0, 10) + '.txt';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    var text = buildText();
+    var blob = new Blob([text], {type:'text/plain'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = 'speaknote-' + new Date().toISOString().slice(0, 10) + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
     showToast('Exported!', 'success');
 }
 
-// ── Speech recognition ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Speech Recognition Engine
 // Architecture: non-continuous short sessions (continuous:false).
-// Each session listens for one phrase then ends. onend restarts a fresh instance.
-// This avoids the continuous-stream network error / double-restart race on all
-// browsers, and is the only reliable approach on iOS WebKit.
+// Each session listens for one utterance, ends naturally, onend restarts fresh.
+// Avoids the continuous-stream race condition on all browsers.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-function processCommand(t) {
-    const now = Date.now();
-    if (now - state.lastCmdTime < 300) return;
+function processResult(transcript) {
+    var now = Date.now();
+    if (now - state.lastCmdTime < 300) return; // debounce
     state.lastCmdTime = now;
+    var t = transcript.trim();
     if (!t) return;
+    dbg('Result: "' + t.slice(0, 60) + '"', 'ok');
     if (/^(stop|pause|halt)/i.test(t)) {
         stopListening();
         addEntry('system', 'Stopped by voice command');
@@ -684,219 +663,258 @@ function processCommand(t) {
     }
 }
 
-function buildSession() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
+function _abortCurrentRecog() {
+    if (state.recognition) {
+        try {
+            state.recognition.onstart  = null;
+            state.recognition.onresult = null;
+            state.recognition.onerror  = null;
+            state.recognition.onend    = null;
+            state.recognition.abort();
+        } catch(e) { dbg('abort() threw: ' + e.message, 'warn'); }
+        state.recognition = null;
+    }
+}
 
-    const recog = new SR();
-    // continuous:false = short-session mode. Each phrase ends the session naturally.
-    // This is MORE reliable than continuous:true on all browsers, especially iOS.
-    recog.continuous     = false;
+function _scheduleRestart(delay) {
+    clearTimeout(state.guardTimer);
+    state.guardTimer = setTimeout(function() {
+        if (state.isListening) _startSession();
+    }, delay);
+}
+
+function _buildSession() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+        dbg('SpeechRecognition constructor not found', 'err');
+        return null;
+    }
+
+    var recog = new SR();
+    recog.continuous     = false; // short-session: most reliable across all browsers
     recog.interimResults = false;
+    recog.maxAlternatives = 1;
     recog.lang           = state.settings.lang;
 
-    // maxAlternatives:1 — we only need the best result
-    recog.maxAlternatives = 1;
-
     recog.onstart = function() {
-        state.startAttempts = 0; // successful start resets the rapid-fail guard
-        if (!state.sessionActive) {
-            state.sessionActive = true;
+        dbg('onstart fired — lang:' + state.settings.lang + ' attempt:' + state.startAttempts, 'ok');
+        state.startAttempts = 0; // reset rapid-fail guard on successful start
+        if (!state.sessionLogged) {
+            state.sessionLogged = true;
             updateStatus('listening', 'Listening');
             updateMainBtn();
             addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
-            console.log('[SpeakNote] Session started');
         }
     };
 
     recog.onresult = function(e) {
         for (var i = e.resultIndex; i < e.results.length; i++) {
             if (e.results[i].isFinal) {
-                processCommand(e.results[i][0].transcript.trim());
+                processResult(e.results[i][0].transcript);
             }
         }
     };
 
     recog.onerror = function(e) {
-        const errCode = e.error;
-        state.errorCount[errCode] = (state.errorCount[errCode] || 0) + 1;
-        console.error('[SpeakNote] error:', errCode,
-                      '| consecutive:', state.consecutiveErrors,
-                      '| total this type:', state.errorCount[errCode]);
+        var code = e.error;
+        state.errorCount[code] = (state.errorCount[code] || 0) + 1;
+        dbg('onerror: ' + code + ' | consec:' + state.consecutiveErrors + ' | total:' + state.errorCount[code], 'err');
 
-        // Fatal — stop immediately, no retry
-        if (FATAL_ERRORS.has(errCode)) {
-            showToast(ERROR_MESSAGES[errCode] || errCode, 'error');
-            logDiag('Fatal — ' + (ERROR_MESSAGES[errCode] || errCode), true);
+        if (FATAL[code]) {
+            var msg = ERROR_MSG[code] || code;
+            showToast(msg, 'error');
+            addEntry('system', '⚠️ Fatal — ' + msg);
             _haltSession();
             return;
         }
 
-        // Ignorable — normal short-session end, let onend handle the restart quietly
-        if (IGNORABLE_ERRORS.has(errCode)) return;
+        if (IGNORABLE[code]) {
+            dbg('Ignorable error (' + code + ') — onend will restart', 'info');
+            return;
+        }
 
         // Countable error
         state.consecutiveErrors++;
-        const friendly = ERROR_MESSAGES[errCode] || ('Unknown error: ' + errCode);
+        var friendly = ERROR_MSG[code] || ('Unknown error: ' + code);
         showToast(friendly, 'error');
+        dbg(friendly + ' (consecutive: ' + state.consecutiveErrors + ')', 'warn');
 
         if (state.consecutiveErrors >= TIMING.maxErrors) {
-            logDiag('Stopped after ' + TIMING.maxErrors + ' consecutive errors. Last: ' + errCode, true);
+            addEntry('system', '⚠️ Stopped after ' + TIMING.maxErrors + ' errors. Last: ' + code);
             showToast('Stopped — too many errors', 'error');
             _haltSession();
             return;
         }
 
-        if (errCode === 'network') {
-            const delay = TIMING.networkBackoff[Math.min(state.consecutiveErrors - 1, TIMING.networkBackoff.length - 1)];
-            logDiag('Network error (attempt ' + state.consecutiveErrors + ') — retrying in ' + (delay / 1000) + 's', true);
+        // Set restart delay — onend picks this up
+        if (code === 'network') {
+            var idx   = Math.min(state.consecutiveErrors - 1, TIMING.networkBackoff.length - 1);
+            var delay = TIMING.networkBackoff[idx];
+            addEntry('system', '⚠️ Network error (attempt ' + state.consecutiveErrors + ') — retrying in ' + (delay/1000) + 's');
             state.nextRestartDelay = delay;
         } else {
-            logDiag(friendly + ' (attempt ' + state.consecutiveErrors + ')', true);
-            state.nextRestartDelay = TIMING.restartDelay * 4;
+            state.nextRestartDelay = TIMING.restartDelay * 3;
         }
-        // onend fires after onerror and picks up nextRestartDelay
+        // onend always fires after onerror — it will call _scheduleRestart
     };
 
     recog.onend = function() {
-        console.log('[SpeakNote] onend | isListening:', state.isListening,
-                    '| nextRestartDelay:', state.nextRestartDelay);
-        if (!state.isListening) return;
-
-        const delay = state.nextRestartDelay || TIMING.restartDelay;
+        dbg('onend | isListening:' + state.isListening + ' delay:' + state.nextRestartDelay, 'info');
+        if (!state.isListening) {
+            dbg('onend: not listening, doing nothing', 'info');
+            return;
+        }
+        var delay = state.nextRestartDelay || TIMING.restartDelay;
         state.nextRestartDelay = 0;
-
-        setTimeout(function() {
-            if (state.isListening) _startSession();
-        }, delay);
+        _scheduleRestart(delay);
     };
 
     return recog;
 }
 
 function _startSession() {
-    // Guard against rapid start-fail loops (e.g. mic permission not yet granted)
-    state.startAttempts = (state.startAttempts || 0) + 1;
-    if (state.startAttempts > 8) {
-        logDiag('Too many failed start attempts — check mic permissions.', true);
+    if (!state.isListening) {
+        dbg('_startSession called but isListening=false, ignoring', 'warn');
+        return;
+    }
+
+    state.startAttempts++;
+    dbg('_startSession attempt #' + state.startAttempts, 'info');
+
+    if (state.startAttempts > 10) {
+        dbg('Too many start attempts — halting', 'err');
+        addEntry('system', '⚠️ Could not start mic after 10 attempts. Check permissions and HTTPS.');
         _haltSession();
         return;
     }
 
-    // Tear down any stale instance before creating new one
-    if (state.recognition) {
-        try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
-        state.recognition = null;
+    // Always tear down the old instance cleanly first
+    _abortCurrentRecog();
+
+    // On iOS: blur focused element — keyboard open + recognition = conflict
+    if (IS_IOS && document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
     }
 
-    const recog = buildSession();
+    var recog = _buildSession();
     if (!recog) {
-        logDiag('SpeechRecognition not available in this browser.', true);
+        addEntry('system', '⚠️ SpeechRecognition not available. Requires HTTPS + supported browser.');
         _haltSession();
         return;
     }
 
     state.recognition = recog;
 
-    // iOS WebKit: starting recognition while the keyboard is open can fail.
-    // Blur any focused element first.
-    if (IS_IOS && document.activeElement && document.activeElement !== document.body) {
-        document.activeElement.blur();
-    }
-
     try {
         recog.start();
+        dbg('recog.start() called', 'info');
     } catch(e) {
-        console.error('[SpeakNote] start() threw:', e.name, e.message);
+        dbg('recog.start() threw: ' + e.name + ': ' + e.message, 'err');
+        state.recognition = null;
         if (e.name === 'InvalidStateError') {
-            // Already started — shouldn't happen with fresh instances, but handle it
-            setTimeout(function() { if (state.isListening) _startSession(); }, 500);
+            // Recognition already started — wait and retry
+            _scheduleRestart(500);
         } else {
-            logDiag('Could not start mic: ' + e.message, true);
-            setTimeout(function() { if (state.isListening) _startSession(); }, TIMING.networkBase);
+            addEntry('system', '⚠️ Mic start failed: ' + e.message);
+            _scheduleRestart(TIMING.networkBackoff[0]);
         }
     }
 }
 
 function _haltSession() {
+    dbg('_haltSession called', 'info');
+    clearTimeout(state.guardTimer);
     state.isListening      = false;
-    state.sessionActive    = false;
+    state.sessionLogged    = false;
     state.nextRestartDelay = 0;
     state.startAttempts    = 0;
-    if (state.recognition) {
-        try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
-        state.recognition = null;
-    }
+    _abortCurrentRecog();
     releaseWakeLock();
     updateStatus('idle', 'Idle');
     updateMainBtn();
 }
 
-async function toggleListening() {
-    try {
-        if (state.isListening) {
-            stopListening();
-            return;
-        }
+// ── Public toggle — called by button ──────────────────────────────────────────
+function toggleListening() {
+    dbg('toggleListening | isListening:' + state.isListening, 'info');
 
-        // Set listening state and update UI immediately so user sees feedback
-        state.isListening      = true;
-        state.consecutiveErrors = 0;
-        state.sessionActive    = false;
-        state.nextRestartDelay = 0;
-        state.startAttempts    = 0;
-        updateStatus('listening', 'Starting…');
-        updateMainBtn();
+    if (state.isListening) {
+        stopListening();
+        return;
+    }
 
-        // iOS only: pre-warm audio permission via getUserMedia before recognition starts.
-        // Skip on Chrome/Edge — getUserMedia is not needed and can cause permission dialogs.
-        if (IS_IOS && !IS_EDGE && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(function(t) { t.stop(); });
-                await new Promise(function(r) { setTimeout(r, 200); });
-            } catch(e) {
-                showToast('Microphone access denied', 'error');
-                logDiag('getUserMedia denied: ' + e.message, true);
-                _haltSession();
-                return;
-            }
-        }
+    // Immediate UI feedback so user knows the tap registered
+    state.isListening      = true;
+    state.consecutiveErrors = 0;
+    state.sessionLogged    = false;
+    state.nextRestartDelay = 0;
+    state.startAttempts    = 0;
+    updateStatus('starting', 'Starting…');
+    updateMainBtn();
 
-        // Wake lock: best-effort, never block on failure
-        try { await acquireWakeLock(); } catch(e) { console.warn('[SpeakNote] WakeLock skipped:', e); }
-
-        _startSession();
-
-    } catch(e) {
-        // Catch-all: if anything above throws, reset state so button is usable again
-        console.error('[SpeakNote] toggleListening error:', e);
-        logDiag('Start failed: ' + e.message, true);
+    // HTTPS check
+    if (!IS_SECURE) {
+        dbg('Blocked: not HTTPS', 'err');
+        showToast('HTTPS required for mic access', 'error');
+        addEntry('system', '⚠️ Speech recognition requires HTTPS. This page is on ' + location.protocol);
         _haltSession();
+        return;
+    }
+
+    // Wake lock — best-effort, never block on failure
+    acquireWakeLock().catch(function(e) { dbg('WakeLock failed: ' + e, 'warn'); });
+
+    // iOS only: pre-warm audio permission via getUserMedia, then start recognition.
+    // On Chrome/Edge this is unnecessary and can cause extra permission prompts.
+    if (IS_IOS && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        dbg('iOS: pre-warming getUserMedia', 'info');
+        navigator.mediaDevices.getUserMedia({audio:true})
+            .then(function(stream) {
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                dbg('getUserMedia OK — starting session in 250ms', 'ok');
+                setTimeout(function() {
+                    if (state.isListening) _startSession();
+                }, 250);
+            })
+            .catch(function(e) {
+                dbg('getUserMedia denied: ' + e.message, 'err');
+                showToast('Microphone access denied', 'error');
+                addEntry('system', '⚠️ Mic permission denied: ' + e.message);
+                _haltSession();
+            });
+    } else {
+        // Chrome / Edge / desktop: start directly
+        _startSession();
     }
 }
 
 function stopListening() {
+    dbg('stopListening called', 'info');
     state.consecutiveErrors = 0;
     _haltSession();
     addEntry('system', '⏹ Stopped');
 }
 
 // ── Wake lock ─────────────────────────────────────────────────────────────────
-async function acquireWakeLock() {
+function acquireWakeLock() {
     if ('wakeLock' in navigator) {
-        try { state.wakeLock = await navigator.wakeLock.request('screen'); return; }
-        catch(e) { console.warn('[SpeakNote] WakeLock failed:', e); }
+        return navigator.wakeLock.request('screen')
+            .then(function(wl) { state.wakeLock = wl; dbg('WakeLock acquired', 'ok'); })
+            .catch(function(e) { dbg('WakeLock request failed: ' + e.message, 'warn'); });
     }
-    // Fallback: tiny silent video loop keeps screen awake on older iOS
-    try { await els.noSleep.play(); } catch(e) {}
+    // Fallback: silent video loop
+    return els.noSleep.play().catch(function() {});
 }
 function releaseWakeLock() {
-    if (state.wakeLock) { state.wakeLock.release().catch(function(){}); state.wakeLock = null; }
+    if (state.wakeLock) {
+        state.wakeLock.release().catch(function(){});
+        state.wakeLock = null;
+        dbg('WakeLock released', 'info');
+    }
     try { els.noSleep.pause(); } catch(e) {}
 }
 
-// ── UI ────────────────────────────────────────────────────────────────────────
+// ── UI helpers ────────────────────────────────────────────────────────────────
 function updateStatus(type, text) {
     els.status.className   = 'status ' + type;
     els.status.textContent = text;
@@ -915,7 +933,7 @@ function updateMainBtn() {
     }
 }
 
-let toastTimer;
+var toastTimer;
 function showToast(msg, type) {
     clearTimeout(toastTimer);
     els.toast.textContent = msg;
@@ -926,14 +944,16 @@ function showToast(msg, type) {
 // ── Settings ──────────────────────────────────────────────────────────────────
 function loadSettings() {
     try {
-        const s = localStorage.getItem('speaknote_settings');
+        var s = localStorage.getItem('speaknote_settings');
         if (s) Object.assign(state.settings, JSON.parse(s));
-    } catch(e) { console.warn('[SpeakNote] Could not load settings:', e); }
-    setLang(state.settings.lang);
+    } catch(e) { dbg('loadSettings error: ' + e.message, 'warn'); }
+    state._langInitDone = false;
+    setLang(state.settings.lang);   // no toast on init
+    state._langInitDone = true;
 }
 function saveSettings() {
     try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); }
-    catch(e) { console.warn('[SpeakNote] Could not save settings:', e); }
+    catch(e) { dbg('saveSettings error: ' + e.message, 'warn'); }
 }
 
 // ── PWA install ───────────────────────────────────────────────────────────────
@@ -948,12 +968,13 @@ function setupInstall() {
         showToast('SpeakNote installed!', 'success');
     });
 }
-async function installPWA() {
+function installPWA() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
-    const r = await deferredPrompt.userChoice;
-    if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show');
-    deferredPrompt = null;
+    deferredPrompt.userChoice.then(function(r) {
+        if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show');
+        deferredPrompt = null;
+    });
 }
 
 init();
