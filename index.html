@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.0</title>
+    <title>SpeakNote v1.2</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -317,7 +317,7 @@
     <div class="header">
         <div class="header-left">
             <div class="logo-icon">🎙️</div>
-            <h1>SpeakNote <span class="version">v1.0</span></h1>
+            <h1>SpeakNote <span class="version">v1.2</span></h1>
         </div>
         <div class="status idle" id="status">Idle</div>
     </div>
@@ -383,79 +383,127 @@
     <video id="no-sleep" loop muted playsinline><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAACKBtZGF0AAAC" type="video/mp4"></video>
 
     <script>
-const APP_VERSION = '1.0';
-const APP_BUILD = '2026-05-12-1';
+const APP_VERSION = '1.2';
+const APP_BUILD   = '2026-05-27-1';
 
+// ── Browser / engine detection ───────────────────────────────────────────────
+const UA = navigator.userAgent;
+const IS_WEBKIT  = /WebKit/.test(UA) && !/Chrome/.test(UA);   // Safari & iOS browsers
+const IS_IOS     = /iPad|iPhone|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_EDGE    = /Edg\//.test(UA);
+const IS_CHROME  = /Chrome/.test(UA) && !IS_EDGE;
+const IS_MOBILE  = IS_IOS || /Android/.test(UA);
+
+// Engine-specific timing constants
+// iOS WebKit needs more breathing room between sessions for audio session re-acquisition
+// Edge on desktop is similar to Chrome; Edge on iOS is WebKit underneath
+const TIMING = IS_IOS ? {
+    restartDelay:      600,   // ms between sessions (WebKit audio session re-acquire)
+    networkBase:      2000,   // first network retry delay
+    networkBackoff:   [2000, 4000, 8000, 16000],
+    maxErrors:           4
+} : {
+    restartDelay:       80,
+    networkBase:      1000,
+    networkBackoff:   [1000, 2000, 4000, 8000],
+    maxErrors:           5
+};
+
+console.log('[SpeakNote] Engine:', IS_IOS ? 'iOS-WebKit' : IS_WEBKIT ? 'WebKit' : IS_EDGE ? 'Edge' : IS_CHROME ? 'Chrome' : 'Other',
+            '| Mobile:', IS_MOBILE, '| Build:', APP_BUILD);
+
+// ── Language map ─────────────────────────────────────────────────────────────
 const LANG_NAMES = {
     'en-US': 'English', 'es-ES': 'Español', 'fr-FR': 'Français', 'de-DE': 'Deutsch',
     'it-IT': 'Italiano', 'pt-BR': 'Português', 'ja-JP': '日本語', 'ko-KR': '한국어',
     'zh-CN': '中文', 'nl-NL': 'Nederlands'
 };
 
-// Error explanations shown to the user in plain language
+// ── Error taxonomy ───────────────────────────────────────────────────────────
 const ERROR_MESSAGES = {
-    'network':      'Network error — speech service unreachable. Check your connection.',
-    'not-allowed':  'Microphone access denied. Allow mic in browser settings.',
-    'no-speech':    'No speech detected.',
-    'aborted':      'Microphone input was aborted.',
-    'audio-capture':'No microphone found or mic is in use by another app.',
-    'service-not-allowed': 'Speech service blocked. Try a different browser.',
-    'bad-grammar':  'Speech grammar error.',
-    'language-not-supported': 'Selected language not supported by this browser.'
+    'network':               'Network error — speech service unreachable.',
+    'not-allowed':           'Microphone access denied. Allow mic in browser settings.',
+    'no-speech':             'No speech detected.',
+    'aborted':               'Session aborted.',
+    'audio-capture':         'No microphone found or mic is in use by another app.',
+    'service-not-allowed':   'Speech service blocked. Try a different browser.',
+    'bad-grammar':           'Speech grammar error.',
+    'language-not-supported':'Selected language not supported by this browser.'
 };
 
-// Errors that should NOT count toward the consecutive error limit
+// no-speech and aborted are normal short-session endings — don't count or log them
 const IGNORABLE_ERRORS = new Set(['no-speech', 'aborted']);
 
-// Errors that should stop listening entirely (no retry makes sense)
+// Fatal — no retry makes sense
 const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
-// Backoff delays (ms) per error type for network issues
-const NETWORK_BACKOFF = [1000, 2000, 4000, 8000];
-
+// ── State ────────────────────────────────────────────────────────────────────
 let state = {
     entries: [], isListening: false, recognition: null, wakeLock: null,
     settings: { autorestart: true, lang: 'en-US' },
     consecutiveErrors: 0, lastCmdTime: 0,
-    errorCount: {},        // per error-type counts for diagnostics
-    sessionActive: false,  // true once mic-active entry has been logged for this user session
-    nextRestartDelay: 0    // delay (ms) onend should wait before restarting (set by onerror)
+    errorCount: {},
+    sessionActive:    false,   // true once mic-active entry logged for this user session
+    nextRestartDelay: 0,       // delay onend should use (set by onerror)
+    startAttempts:    0        // guard against rapid start-fail loops
 };
 let deferredPrompt = null;
 
 const els = {
-    status:    document.getElementById('status'),
-    mainBtn:   document.getElementById('main-btn'),
-    btnIcon:   document.getElementById('btn-icon'),
-    btnText:   document.getElementById('btn-text'),
-    notes:     document.getElementById('notes'),
-    toast:     document.getElementById('toast'),
-    noSleep:   document.getElementById('no-sleep'),
-    waveform:  document.getElementById('waveform'),
-    noteCount: document.getElementById('note-count'),
-    emptyState:document.getElementById('empty-state'),
+    status:     document.getElementById('status'),
+    mainBtn:    document.getElementById('main-btn'),
+    btnIcon:    document.getElementById('btn-icon'),
+    btnText:    document.getElementById('btn-text'),
+    notes:      document.getElementById('notes'),
+    toast:      document.getElementById('toast'),
+    noSleep:    document.getElementById('no-sleep'),
+    waveform:   document.getElementById('waveform'),
+    noteCount:  document.getElementById('note-count'),
+    emptyState: document.getElementById('empty-state'),
 };
 
-// ── Diagnostics log (visible in entries + console) ──────────────────────────
+// ── Diagnostics ──────────────────────────────────────────────────────────────
 function logDiag(msg, isError) {
-    const prefix = isError ? '⚠️' : 'ℹ️';
     console[isError ? 'error' : 'log']('[SpeakNote]', msg);
-    addEntry('system', prefix + ' ' + msg);
+    addEntry('system', (isError ? '⚠️' : 'ℹ️') + ' ' + msg);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 function init() {
     loadSettings();
     setupInstall();
+    setupVisibilityHandler();
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js')
             .then(function() { console.log('[SpeakNote] SW registered'); })
             .catch(function(e) { console.warn('[SpeakNote] SW failed:', e); });
     }
-    // Log browser speech support on load
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) logDiag('Speech recognition not supported in this browser.', true);
-    else console.log('[SpeakNote] SpeechRecognition available');
+}
+
+// ── Visibility handler — pause/resume on tab hide/show ───────────────────────
+// iOS and mobile browsers suspend audio sessions when the tab is hidden.
+// We stop cleanly on hide and offer to resume on show.
+function setupVisibilityHandler() {
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden && state.isListening) {
+            console.log('[SpeakNote] Tab hidden — suspending session');
+            // Soft-suspend: keep isListening=true but abort the recognition
+            // so iOS releases the audio session properly
+            if (state.recognition) {
+                try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
+                state.recognition = null;
+            }
+            updateStatus('listening', 'Paused');
+        } else if (!document.hidden && state.isListening) {
+            console.log('[SpeakNote] Tab visible — resuming session');
+            // Resume after a delay so the audio system wakes back up
+            setTimeout(function() {
+                if (state.isListening) _startSession();
+            }, IS_IOS ? 1200 : 400);
+        }
+    });
 }
 
 // ── Language ─────────────────────────────────────────────────────────────────
@@ -467,62 +515,60 @@ function setLang(lang) {
     saveSettings();
     showToast('Language: ' + LANG_NAMES[lang], 'success');
     if (state.isListening) {
-        // Restart with new language — abort current session, new one picks up lang from state
         if (state.recognition) {
             try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
             state.recognition = null;
         }
-        state.sessionActive = false; // so new lang gets logged
-        setTimeout(function() { if (state.isListening) _startSession(); }, 300);
+        state.sessionActive = false; // log new language on restart
+        setTimeout(function() { if (state.isListening) _startSession(); },
+                   IS_IOS ? 800 : 300);
     }
 }
 
-// ── Entry count & empty state ─────────────────────────────────────────────────
+// ── Entry count ───────────────────────────────────────────────────────────────
 function updateEntryCount() {
-    // Count only user-facing entries (voice + manual), not system logs
     const n = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
     els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
-    // Show empty state only if zero entries total
     els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
 }
 
 // ── Entries ───────────────────────────────────────────────────────────────────
 function addEntry(type, text, editable) {
-    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const time  = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const entry = { type: type, text: text, time: time, ts: Date.now(), editable: !!editable };
     state.entries.unshift(entry);
     renderEntry(entry, true);
-    // Cap at 200 entries
     while (state.entries.length > 200) {
         state.entries.pop();
-        var domEntries = els.notes.querySelectorAll('.entry');
-        if (domEntries.length) domEntries[domEntries.length - 1].remove();
+        var all = els.notes.querySelectorAll('.entry');
+        if (all.length) all[all.length - 1].remove();
     }
     updateEntryCount();
 }
 
 function renderEntry(entry, prepend) {
-    const div = document.createElement('div');
+    const div      = document.createElement('div');
     const isVoice  = entry.type === 'voice';
     const isManual = entry.type === 'manual';
     const isSystem = entry.type === 'system';
-
-    div.className = 'entry' +
+    div.className  = 'entry' +
         (isVoice  ? ' voice-entry'  : '') +
         (isManual ? ' manual-entry' : '') +
         (isSystem ? ' system-entry' : '');
     div.dataset.ts = String(entry.ts);
 
-    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : isSystem ? 'badge-system' : '';
     const badgeLabel = isVoice ? 'Voice' : isManual ? 'Note' : isSystem ? 'System' : '';
-    const badgeHtml  = badgeLabel ? `<span class="entry-badge ${badgeClass}">${badgeLabel}</span>` : '';
+    const badgeClass = isVoice ? 'badge-voice' : isManual ? 'badge-note' : 'badge-system';
+    const badgeHtml  = badgeLabel
+        ? '<span class="entry-badge ' + badgeClass + '">' + badgeLabel + '</span>'
+        : '';
 
     if (entry.editable) {
-        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div>` +
-            `<textarea rows="1" oninput="autoResize(this);updateEntry(this)">${escapeHtml(entry.text)}</textarea>`;
+        div.innerHTML = '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+            '<textarea rows="1" oninput="autoResize(this);updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
     } else {
-        div.innerHTML = `<div class="entry-meta"><span class="entry-time">${entry.time}</span>${badgeHtml}</div>` +
-            `<div class="entry-text">${escapeHtml(entry.text)}</div>`;
+        div.innerHTML = '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+            '<div class="entry-text">' + escapeHtml(entry.text) + '</div>';
     }
 
     const header = els.notes.querySelector('.notes-header');
@@ -532,25 +578,21 @@ function renderEntry(entry, prepend) {
     if (entry.editable) {
         const ta = div.querySelector('textarea');
         autoResize(ta);
-        ta.focus();
+        // Delay focus on iOS to avoid keyboard fighting with audio session
+        setTimeout(function() { ta.focus(); }, IS_IOS ? 300 : 0);
     }
 }
 
 function autoResize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 
 function updateEntry(ta) {
-    const ts = Number(ta.closest('.entry').dataset.ts); // use closest, not parentElement
+    const ts = Number(ta.closest('.entry').dataset.ts);
     if (!ts) return;
     const e = state.entries.find(function(x) { return x.ts === ts; });
     if (e) e.text = ta.value;
 }
 
-function escapeHtml(t) {
-    const d = document.createElement('div');
-    d.textContent = t;
-    return d.innerHTML;
-}
-
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function addManualNote() { addEntry('manual', '', true); }
 
 function undoLast() {
@@ -564,7 +606,6 @@ function undoLast() {
 
 function clearNotes() {
     state.entries = [];
-    // Remove all .entry nodes but keep .notes-header and #empty-state
     els.notes.querySelectorAll('.entry').forEach(function(el) { el.remove(); });
     updateEntryCount();
     showToast('Notes cleared', 'success');
@@ -572,153 +613,154 @@ function clearNotes() {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 function buildText() {
-    // Export only voice + manual entries, not system logs
-    const exportable = state.entries.slice().reverse().filter(function(e) {
-        return e.type === 'voice' || e.type === 'manual';
-    });
-    return exportable.map(function(e) {
-        const label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
-        const body  = e.text.split(/\r?\n/).map(function(l) { return '    ' + l; }).join('\n');
-        return e.time + '  ' + label + '\n' + body;
-    }).join('\n\n');
+    return state.entries.slice().reverse()
+        .filter(function(e) { return e.type === 'voice' || e.type === 'manual'; })
+        .map(function(e) {
+            const label = e.type === 'voice' ? '[VOICE]' : '[NOTE]';
+            const body  = e.text.split(/?
+/).map(function(l) { return '    ' + l; }).join('
+');
+            return e.time + '  ' + label + '
+' + body;
+        }).join('
+
+');
 }
 
 function copyToClipboard() {
     const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
-    if (exportable.length === 0) { showToast('No notes to copy', 'error'); return; }
+    if (!exportable.length) { showToast('No notes to copy', 'error'); return; }
     const text = buildText();
-    function fallbackCopy() {
+    function fallback() {
         const ta = document.createElement('textarea');
         ta.value = text;
         ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
-        document.body.appendChild(ta);
-        ta.focus(); ta.setSelectionRange(0, text.length);
+        document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, text.length);
         try { const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok; }
         catch(e) { document.body.removeChild(ta); return false; }
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
             .then(function() { showToast('Copied!', 'success'); })
-            .catch(function() { fallbackCopy() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error'); });
+            .catch(function() { fallback() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error'); });
     } else {
-        fallbackCopy() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error');
+        fallback() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error');
     }
 }
 
 function exportText() {
     const exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
-    if (exportable.length === 0) { showToast('No notes to export', 'error'); return; }
+    if (!exportable.length) { showToast('No notes to export', 'error'); return; }
     const text = buildText();
     const blob = new Blob([text], { type: 'text/plain' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href     = url;
-    a.download = 'speaknote-' + new Date().toISOString().slice(0, 10) + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Delay revoke so browser has time to start the download
+    a.href = url; a.download = 'speaknote-' + new Date().toISOString().slice(0, 10) + '.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
     showToast('Exported!', 'success');
 }
 
 // ── Speech recognition ────────────────────────────────────────────────────────
-// Architecture: non-continuous short sessions.
-// We use continuous:false so the browser naturally ends each session after
-// a phrase. onend then restarts a fresh instance. This avoids the
-// continuous:true network-error / double-restart race entirely.
+// Architecture: non-continuous short sessions (continuous:false).
+// Each session listens for one phrase then ends. onend restarts a fresh instance.
+// This avoids the continuous-stream network error / double-restart race on all
+// browsers, and is the only reliable approach on iOS WebKit.
 
 function processCommand(t) {
     const now = Date.now();
-    if (now - state.lastCmdTime < 300) return; // debounce
+    if (now - state.lastCmdTime < 300) return;
     state.lastCmdTime = now;
     if (!t) return;
     if (/^(stop|pause|halt)/i.test(t)) {
         stopListening();
         addEntry('system', 'Stopped by voice command');
     } else {
-        state.consecutiveErrors = 0; // successful result resets error count
+        state.consecutiveErrors = 0;
         addEntry('voice', t);
     }
 }
 
 function buildSession() {
-    // Returns a fresh SpeechRecognition instance, does NOT start it.
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
+
     const recog = new SR();
-    recog.continuous     = false; // KEY: short-session mode — no continuous stream to lose
+    // continuous:false = short-session mode. Each phrase ends the session naturally.
+    // This is MORE reliable than continuous:true on all browsers, especially iOS.
+    recog.continuous     = false;
     recog.interimResults = false;
     recog.lang           = state.settings.lang;
 
+    // maxAlternatives:1 — we only need the best result
+    recog.maxAlternatives = 1;
+
     recog.onstart = function() {
-        // Only log mic-active once at the start of a user session, not every restart
+        state.startAttempts = 0; // successful start resets the rapid-fail guard
         if (!state.sessionActive) {
             state.sessionActive = true;
             updateStatus('listening', 'Listening');
             updateMainBtn();
             addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
-            console.log('[SpeakNote] Session started, lang:', state.settings.lang);
+            console.log('[SpeakNote] Session started');
         }
     };
 
     recog.onresult = function(e) {
         for (var i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) processCommand(e.results[i][0].transcript.trim());
+            if (e.results[i].isFinal) {
+                processCommand(e.results[i][0].transcript.trim());
+            }
         }
     };
 
     recog.onerror = function(e) {
         const errCode = e.error;
         state.errorCount[errCode] = (state.errorCount[errCode] || 0) + 1;
-        console.error('[SpeakNote] error:', errCode, 'total:', state.errorCount[errCode],
-                      'consecutive:', state.consecutiveErrors);
+        console.error('[SpeakNote] error:', errCode,
+                      '| consecutive:', state.consecutiveErrors,
+                      '| total this type:', state.errorCount[errCode]);
 
+        // Fatal — stop immediately, no retry
         if (FATAL_ERRORS.has(errCode)) {
-            const friendly = ERROR_MESSAGES[errCode] || errCode;
-            showToast(friendly, 'error');
-            logDiag('Fatal — ' + friendly, true);
+            showToast(ERROR_MESSAGES[errCode] || errCode, 'error');
+            logDiag('Fatal — ' + (ERROR_MESSAGES[errCode] || errCode), true);
             _haltSession();
             return;
         }
 
-        if (IGNORABLE_ERRORS.has(errCode)) {
-            // no-speech / aborted: normal end of a short session, just let onend restart it
-            return;
-        }
+        // Ignorable — normal short-session end, let onend handle the restart quietly
+        if (IGNORABLE_ERRORS.has(errCode)) return;
 
-        // Countable error (network, bad-grammar, etc.)
+        // Countable error
         state.consecutiveErrors++;
         const friendly = ERROR_MESSAGES[errCode] || ('Unknown error: ' + errCode);
-        const attempt  = state.consecutiveErrors;
         showToast(friendly, 'error');
 
-        if (state.consecutiveErrors >= 5) {
-            logDiag('Stopped after 5 consecutive errors. Last: ' + errCode, true);
+        if (state.consecutiveErrors >= TIMING.maxErrors) {
+            logDiag('Stopped after ' + TIMING.maxErrors + ' consecutive errors. Last: ' + errCode, true);
             showToast('Stopped — too many errors', 'error');
             _haltSession();
             return;
         }
 
-        // For network errors, log with backoff delay so user sees what's happening
         if (errCode === 'network') {
-            const delay = NETWORK_BACKOFF[Math.min(attempt - 1, NETWORK_BACKOFF.length - 1)];
-            logDiag('Network error (attempt ' + attempt + ') — retrying in ' + (delay/1000) + 's', true);
-            // onend will fire after this; we store the delay so onend uses it
+            const delay = TIMING.networkBackoff[Math.min(state.consecutiveErrors - 1, TIMING.networkBackoff.length - 1)];
+            logDiag('Network error (attempt ' + state.consecutiveErrors + ') — retrying in ' + (delay / 1000) + 's', true);
             state.nextRestartDelay = delay;
         } else {
-            logDiag(friendly + ' (attempt ' + attempt + ')', true);
-            state.nextRestartDelay = 600;
+            logDiag(friendly + ' (attempt ' + state.consecutiveErrors + ')', true);
+            state.nextRestartDelay = TIMING.restartDelay * 4;
         }
-        // onend fires next and handles the actual restart
+        // onend fires after onerror and picks up nextRestartDelay
     };
 
     recog.onend = function() {
-        console.log('[SpeakNote] onend — isListening:', state.isListening);
-        if (!state.isListening) return; // user stopped manually
+        console.log('[SpeakNote] onend | isListening:', state.isListening,
+                    '| nextRestartDelay:', state.nextRestartDelay);
+        if (!state.isListening) return;
 
-        // Consume the delay set by onerror (or use short default for clean ends)
-        const delay = state.nextRestartDelay || 80;
+        const delay = state.nextRestartDelay || TIMING.restartDelay;
         state.nextRestartDelay = 0;
 
         setTimeout(function() {
@@ -730,33 +772,54 @@ function buildSession() {
 }
 
 function _startSession() {
-    // Tear down any existing instance cleanly before creating a new one
+    // Guard against rapid start-fail loops (e.g. mic permission not yet granted)
+    state.startAttempts = (state.startAttempts || 0) + 1;
+    if (state.startAttempts > 8) {
+        logDiag('Too many failed start attempts — check mic permissions.', true);
+        _haltSession();
+        return;
+    }
+
+    // Tear down any stale instance before creating new one
     if (state.recognition) {
         try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
         state.recognition = null;
     }
+
     const recog = buildSession();
     if (!recog) {
         logDiag('SpeechRecognition not available in this browser.', true);
         _haltSession();
         return;
     }
+
     state.recognition = recog;
+
+    // iOS WebKit: starting recognition while the keyboard is open can fail.
+    // Blur any focused element first.
+    if (IS_IOS && document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+    }
+
     try {
         recog.start();
     } catch(e) {
         console.error('[SpeakNote] start() threw:', e.name, e.message);
-        logDiag('Could not start mic: ' + e.message, true);
-        // Retry after a short pause
-        setTimeout(function() { if (state.isListening) _startSession(); }, 1000);
+        if (e.name === 'InvalidStateError') {
+            // Already started — shouldn't happen with fresh instances, but handle it
+            setTimeout(function() { if (state.isListening) _startSession(); }, 500);
+        } else {
+            logDiag('Could not start mic: ' + e.message, true);
+            setTimeout(function() { if (state.isListening) _startSession(); }, TIMING.networkBase);
+        }
     }
 }
 
 function _haltSession() {
-    // Internal stop — does not log a "Stopped" entry (used for fatal/error paths)
-    state.isListening     = false;
-    state.sessionActive   = false;
+    state.isListening      = false;
+    state.sessionActive    = false;
     state.nextRestartDelay = 0;
+    state.startAttempts    = 0;
     if (state.recognition) {
         try { state.recognition.onend = null; state.recognition.abort(); } catch(e) {}
         state.recognition = null;
@@ -770,10 +833,25 @@ async function toggleListening() {
     if (state.isListening) {
         stopListening();
     } else {
-        state.isListening     = true;
+        // On iOS, request audio permission proactively before starting recognition
+        // to avoid the first-attempt failure that often happens on WebKit
+        if (IS_IOS && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Immediately release — recognition will re-acquire it
+                stream.getTracks().forEach(function(t) { t.stop(); });
+                await new Promise(function(r) { setTimeout(r, 200); });
+            } catch(e) {
+                showToast('Microphone access denied', 'error');
+                logDiag('getUserMedia denied: ' + e.message, true);
+                return;
+            }
+        }
+        state.isListening      = true;
         state.consecutiveErrors = 0;
-        state.sessionActive   = false;
+        state.sessionActive    = false;
         state.nextRestartDelay = 0;
+        state.startAttempts    = 0;
         await acquireWakeLock();
         _startSession();
     }
@@ -791,6 +869,7 @@ async function acquireWakeLock() {
         try { state.wakeLock = await navigator.wakeLock.request('screen'); return; }
         catch(e) { console.warn('[SpeakNote] WakeLock failed:', e); }
     }
+    // Fallback: tiny silent video loop keeps screen awake on older iOS
     try { await els.noSleep.play(); } catch(e) {}
 }
 function releaseWakeLock() {
@@ -798,19 +877,19 @@ function releaseWakeLock() {
     try { els.noSleep.pause(); } catch(e) {}
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
+// ── UI ────────────────────────────────────────────────────────────────────────
 function updateStatus(type, text) {
-    els.status.className  = 'status ' + type;
+    els.status.className   = 'status ' + type;
     els.status.textContent = text;
 }
 function updateMainBtn() {
     if (state.isListening) {
-        els.mainBtn.className  = 'main-btn stop';
+        els.mainBtn.className   = 'main-btn stop';
         els.btnIcon.textContent = '⏹';
         els.btnText.textContent = 'Stop Recording';
         els.waveform.classList.add('active');
     } else {
-        els.mainBtn.className  = 'main-btn start';
+        els.mainBtn.className   = 'main-btn start';
         els.btnIcon.textContent = '▶';
         els.btnText.textContent = 'Start Recording';
         els.waveform.classList.remove('active');
