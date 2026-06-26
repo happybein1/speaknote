@@ -10,7 +10,7 @@
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
     <meta property="og:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="og-image.png">
+    <meta property="og:image" content="https://speaknote.happybein.com/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="SpeakNote app open on a phone, being used by someone speaking into it">
@@ -18,11 +18,14 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SpeakNote — Voice Notes, Instantly">
     <meta name="twitter:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export.">
-    <meta name="twitter:image" content="og-image.png">
+    <meta name="twitter:image" content="https://speaknote.happybein.com/og-image.png">
     <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
+    <link rel="canonical" href="https://speaknote.happybein.com" />
+    <meta name="author" content="HappyBein — happybein.com" />
+    <meta name="robots" content="index, follow" />
 
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="og-image.png">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f0f23'/%3E%3Crect x='24' y='8' width='16' height='26' rx='8' fill='%2300d4aa'/%3E%3Cpath d='M16 30c0 8.837 7.163 16 16 16s16-7.163 16-16' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round' fill='none'/%3E%3Cline x1='32' y1='46' x2='32' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='24' y1='54' x2='40' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -990,14 +993,6 @@ function setupInstall() {
 }
 function installPWA() {
     if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function(r) {
-        if (r.outcome === 'accepted') document.getElementById('install-banner').classList.remove('show');
-        deferredPrompt = null;
-    });
-}
-
-init();
-    </script>
-</body>
-</html>
+    deferredPrompt.prompt(
+<!-- HappyBein backlink -->
+<a href="https://happybein.com" target="_blank" rel="noopener" aria-label="HappyBein" style="position:fixed;bottom:14px;right:14px;width:30px;height:30px;border-radius:50%;background:#2ABFBF;color:#fff;display:flex;align-items:center;justify-content:center;font-family:Nunito,Arial,sans-serif;font-weight:900;font-size:14px;text-decoration:none;box-shadow:0 2px 8px rgba(42,191,191,0.4);z-index:9999;opacity:0.85;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.85'">H</a>
