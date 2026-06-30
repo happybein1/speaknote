@@ -257,12 +257,12 @@
             <button class="sec-btn" onclick="undoLast()"><span class="sec-icon">↩</span><span>Undo</span></button>
             <button class="sec-btn" onclick="copyToClipboard()"><span class="sec-icon">📋</span><span>Copy</span></button>
             <button class="sec-btn" onclick="exportText()"><span class="sec-icon">⬇</span><span>Export</span></button>
-            <button class="sec-btn debug-sec-btn active" onclick="toggleDebug()" id="debug-btn" title="Debug log"><span class="sec-icon">🐛</span><span>Debug</span></button>
+            <button class="sec-btn debug-sec-btn" onclick="toggleDebug()" id="debug-btn" title="Debug log"><span class="sec-icon">🐛</span><span>Debug</span></button>
         </div>
     </div>
 
     <!-- On-screen debug panel — toggle with 🐛 button -->
-    <div class="debug-panel show" id="debug-panel">
+    <div class="debug-panel" id="debug-panel">
         <div class="debug-panel-header">
             <span class="debug-panel-title">🐛 Debug Log</span>
             <button class="debug-clear" onclick="clearDebugLog()">Clear</button>
