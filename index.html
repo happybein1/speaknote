@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.5</title>
+    <title>SpeakNote v1.6</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
-    <meta property="og:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
+    <meta property="og:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Notes are saved on your device.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="og-image.png">
     <meta property="og:image:width" content="1200">
@@ -19,7 +19,7 @@
     <meta name="twitter:title" content="SpeakNote — Voice Notes, Instantly">
     <meta name="twitter:description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export.">
     <meta name="twitter:image" content="og-image.png">
-    <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
+    <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Notes are saved on your device.">
 
     <link rel="manifest" href="manifest.json?v=1.5">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png?v=1.5">
@@ -183,6 +183,12 @@
         .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:var(--muted);text-align:center;gap:10px;}
         .empty-icon{font-size:36px;opacity:0.4;}
         .empty-text{font-size:13px;font-family:'DM Mono',monospace;opacity:0.6;}
+        .privacy-note{font-size:11px;line-height:1.5;opacity:0.5;max-width:300px;}
+        /* Per-entry actions */
+        .entry-actions{margin-left:auto;display:flex;gap:2px;}
+        .entry-actions button{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:6px 9px;border-radius:6px;line-height:1;}
+        .entry-actions button:hover{color:var(--text);background:var(--card2);}
+        .entry-actions button.del:hover{color:var(--danger);}
         /* Toast */
         .toast{
             position:fixed;bottom:110px;left:50%;
@@ -231,7 +237,7 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version">v1.5</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.6</span></h1>
         </div>
         <div class="status idle" id="status">Idle</div>
     </div>
@@ -247,6 +253,12 @@
         <button class="lang-btn" data-lang="ko-KR" onclick="setLang('ko-KR')">🇰🇷 KR</button>
         <button class="lang-btn" data-lang="zh-CN" onclick="setLang('zh-CN')">🇨🇳 CN</button>
         <button class="lang-btn" data-lang="nl-NL" onclick="setLang('nl-NL')">🇳🇱 NL</button>
+        <button class="lang-btn" data-lang="ru-RU" onclick="setLang('ru-RU')">🇷🇺 RU</button>
+        <button class="lang-btn" data-lang="tr-TR" onclick="setLang('tr-TR')">🇹🇷 TR</button>
+        <button class="lang-btn" data-lang="pl-PL" onclick="setLang('pl-PL')">🇵🇱 PL</button>
+        <button class="lang-btn" data-lang="sv-SE" onclick="setLang('sv-SE')">🇸🇪 SV</button>
+        <button class="lang-btn" data-lang="hi-IN" onclick="setLang('hi-IN')">🇮🇳 HI</button>
+        <button class="lang-btn" data-lang="ar-SA" onclick="setLang('ar-SA')">🇸🇦 AR</button>
     </div>
 
     <div class="controls">
@@ -259,8 +271,8 @@
             <button class="sec-btn" onclick="addManualNote()"><span class="sec-icon">✎</span><span>Note</span></button>
             <button class="sec-btn" onclick="undoLast()"><span class="sec-icon">↩</span><span>Undo</span></button>
             <button class="sec-btn" onclick="copyToClipboard()"><span class="sec-icon">📋</span><span>Copy</span></button>
+            <button class="sec-btn" id="share-btn" onclick="shareNotes()" style="display:none"><span class="sec-icon">↗</span><span>Share</span></button>
             <button class="sec-btn" onclick="exportText()"><span class="sec-icon">⬇</span><span>Export</span></button>
-            <button class="sec-btn debug-sec-btn" onclick="toggleDebug()" id="debug-btn" title="Debug log"><span class="sec-icon">🐛</span><span>Debug</span></button>
         </div>
     </div>
 
@@ -284,12 +296,13 @@
         <div class="empty-state" id="empty-state">
             <div class="empty-icon">🎙️</div>
             <div class="empty-text">Press Start Recording to begin</div>
+            <div class="empty-text privacy-note">Notes are saved on this device only. Speech recognition is done by your browser's speech service (Google on Chrome, Microsoft on Edge, Apple on Safari), so your voice is sent to them and a connection is needed.</div>
         </div>
     </div>
 
     <div class="toast" id="toast"></div>
     <div class="install-banner" id="install-banner">
-        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;">📲 Install SpeakNote for offline use</div>
+        <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;">📲 Install SpeakNote on your device</div>
         <div style="display:flex;gap:6px;align-items:center">
             <button onclick="installPWA()">Install</button>
             <button class="install-dismiss" onclick="document.getElementById('install-banner').classList.remove('show')">✕</button>
@@ -302,11 +315,14 @@
 
     <script>
 // ═══════════════════════════════════════════════════════════════════════════════
-// SpeakNote v1.3
+// SpeakNote — version below is the single source: it is written into the header
+// badge at startup (the static "v1.x" in the HTML and <title> are fallbacks and
+// must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.3.2';
-const APP_BUILD   = '2026-05-27-5';
+const APP_VERSION = '1.6';
+const APP_BUILD   = '2026-10-04';
+const STORE_KEY   = 'speaknote_entries';
 
 // ── Debug logger — logs to console AND on-screen panel ───────────────────────
 var debugLines = [];
@@ -334,10 +350,8 @@ function dbg(msg, level) {
 }
 function toggleDebug() {
     var panel = document.getElementById('debug-panel');
-    var btn   = document.getElementById('debug-btn');
     var show  = !panel.classList.contains('show');
     panel.classList.toggle('show', show);
-    btn.classList.toggle('active', show);
     if (show) panel.scrollTop = 0; // scroll to top (newest entries) on open
 }
 function clearDebugLog() {
@@ -379,7 +393,8 @@ var TIMING = IS_IOS ? {
 var LANG_NAMES = {
     'en-US':'English','es-ES':'Español','fr-FR':'Français','de-DE':'Deutsch',
     'it-IT':'Italiano','pt-BR':'Português','ja-JP':'日本語','ko-KR':'한국어',
-    'zh-CN':'中文','nl-NL':'Nederlands'
+    'zh-CN':'中文','nl-NL':'Nederlands','ru-RU':'Русский','tr-TR':'Türkçe',
+    'pl-PL':'Polski','sv-SE':'Svenska','hi-IN':'हिन्दी','ar-SA':'العربية'
 };
 
 // ── Error taxonomy ────────────────────────────────────────────────────────────
@@ -430,6 +445,10 @@ var els = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function init() {
+    document.getElementById('app-version').textContent = 'v' + APP_VERSION;
+    loadEntries();   // restore saved notes first, so startup warnings below land on top
+    if (navigator.share) document.getElementById('share-btn').style.display = '';
+    setupDebugAccess();
     dbg('v' + APP_VERSION + ' build ' + APP_BUILD, 'info');
     dbg('Engine: ' + ENGINE + ' | iOS: ' + IS_IOS + ' | Mobile: ' + IS_MOBILE + ' | Secure: ' + IS_SECURE, 'info');
     dbg('UA: ' + UA.slice(0, 120), 'info');
@@ -505,6 +524,34 @@ function updateEntryCount() {
     els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
 }
 
+// ── Persistence ───────────────────────────────────────────────────────────────
+// Voice and typed notes are kept in localStorage so a reload, refresh or the
+// browser reclaiming the page doesn't lose them. System messages are not saved.
+var _saveWarned = false;
+function saveEntries() {
+    try {
+        var keep = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+        localStorage.setItem(STORE_KEY, JSON.stringify(keep));
+    } catch (err) {
+        dbg('Could not save notes: ' + err.message, 'err');
+        if (!_saveWarned) { _saveWarned = true; showToast('Could not save notes on this device', 'error'); }
+    }
+}
+
+function loadEntries() {
+    var saved = [];
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch (err) { saved = []; }
+    if (!Array.isArray(saved)) saved = [];
+    saved = saved.filter(function(e) {
+        return e && (e.type === 'voice' || e.type === 'manual') &&
+               typeof e.text === 'string' && typeof e.time === 'string' && typeof e.ts === 'number';
+    }).slice(0, 200);
+    state.entries = saved;                       // stored newest first, same as in memory
+    saved.forEach(function(e) { renderEntry(e, false, true); });
+    updateEntryCount();
+    if (saved.length) dbg('Restored ' + saved.length + ' saved notes', 'ok');
+}
+
 function addEntry(type, text, editable) {
     var time  = new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     var entry = {type:type, text:text, time:time, ts:Date.now(), editable:!!editable};
@@ -516,9 +563,10 @@ function addEntry(type, text, editable) {
         if (all.length) all[all.length - 1].remove();
     }
     updateEntryCount();
+    if (type !== 'system') saveEntries();
 }
 
-function renderEntry(entry, prepend) {
+function renderEntry(entry, prepend, noFocus) {
     var div      = document.createElement('div');
     var isVoice  = entry.type === 'voice';
     var isManual = entry.type === 'manual';
@@ -535,13 +583,19 @@ function renderEntry(entry, prepend) {
         ? '<span class="entry-badge ' + badgeClass + '">' + badgeLabel + '</span>'
         : '';
 
+    // Copy / delete for each real note (not system messages).
+    var actionsHtml = isSystem ? '' :
+        '<span class="entry-actions">' +
+        '<button type="button" title="Copy this note" aria-label="Copy this note" onclick="copyEntry(this)">📋</button>' +
+        '<button type="button" class="del" title="Delete this note" aria-label="Delete this note" onclick="deleteEntry(this)">✕</button>' +
+        '</span>';
+    var metaHtml = '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + actionsHtml + '</div>';
+
     if (entry.editable) {
-        div.innerHTML =
-            '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+        div.innerHTML = metaHtml +
             '<textarea rows="1" oninput="autoResize(this);updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>';
     } else {
-        div.innerHTML =
-            '<div class="entry-meta"><span class="entry-time">' + entry.time + '</span>' + badgeHtml + '</div>' +
+        div.innerHTML = metaHtml +
             '<div class="entry-text">' + escapeHtml(entry.text) + '</div>';
     }
 
@@ -552,7 +606,7 @@ function renderEntry(entry, prepend) {
     if (entry.editable) {
         var ta = div.querySelector('textarea');
         autoResize(ta);
-        setTimeout(function() { ta.focus(); }, IS_IOS ? 350 : 0);
+        if (!noFocus) setTimeout(function() { ta.focus(); }, IS_IOS ? 350 : 0);
     }
 }
 
@@ -564,11 +618,37 @@ function updateEntry(ta) {
     var ts = Number(entryEl.dataset.ts);
     if (!ts) return;
     var e = state.entries.find(function(x) { return x.ts === ts; });
-    if (e) e.text = ta.value;
+    if (e) { e.text = ta.value; saveEntries(); }
 }
 
 function escapeHtml(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function addManualNote() { addEntry('manual', '', true); }
+
+// Find the stored entry behind a per-note button.
+function _entryFromBtn(btn) {
+    var el = btn.closest('.entry');
+    if (!el) return null;
+    var ts = Number(el.dataset.ts);
+    var e = state.entries.find(function(x) { return x.ts === ts; });
+    return e ? { el: el, entry: e } : null;
+}
+
+function copyEntry(btn) {
+    var f = _entryFromBtn(btn);
+    if (!f) return;
+    if (!f.entry.text.trim()) { showToast('Nothing to copy', 'error'); return; }
+    copyText(f.entry.text, function(ok) { showToast(ok ? 'Copied!' : 'Copy failed', ok ? 'success' : 'error'); });
+}
+
+function deleteEntry(btn) {
+    var f = _entryFromBtn(btn);
+    if (!f) return;
+    state.entries = state.entries.filter(function(x) { return x !== f.entry; });
+    f.el.remove();
+    updateEntryCount();
+    saveEntries();
+    showToast('Note deleted', 'success');
+}
 
 function undoLast() {
     if (!state.entries.length) { showToast('Nothing to undo', 'error'); return; }
@@ -577,12 +657,16 @@ function undoLast() {
     if (first) first.remove();
     showToast('Undone', 'success');
     updateEntryCount();
+    saveEntries();
 }
 
 function clearNotes() {
+    var saved = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
+    if (saved && !confirm('Delete all ' + saved + ' notes? This cannot be undone.')) return;
     state.entries = [];
     els.notes.querySelectorAll('.entry').forEach(function(el) { el.remove(); });
     updateEntryCount();
+    saveEntries();
     showToast('Notes cleared', 'success');
 }
 
@@ -603,10 +687,8 @@ function buildText() {
     return lines.join('\n\n');
 }
 
-function copyToClipboard() {
-    var exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
-    if (!exportable.length) { showToast('No notes to copy', 'error'); return; }
-    var text = buildText();
+// Copies any text; done(ok) is called with true/false.
+function copyText(text, done) {
     function fallback() {
         var ta = document.createElement('textarea');
         ta.value = text;
@@ -617,11 +699,27 @@ function copyToClipboard() {
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
-            .then(function() { showToast('Copied!', 'success'); })
-            .catch(function() { fallback() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error'); });
+            .then(function() { done(true); })
+            .catch(function() { done(fallback()); });
     } else {
-        fallback() ? showToast('Copied!', 'success') : showToast('Copy failed', 'error');
+        done(fallback());
     }
+}
+
+function copyToClipboard() {
+    var exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    if (!exportable.length) { showToast('No notes to copy', 'error'); return; }
+    copyText(buildText(), function(ok) { showToast(ok ? 'Copied!' : 'Copy failed', ok ? 'success' : 'error'); });
+}
+
+// Share sheet (shown only where the browser supports it, mostly phones).
+function shareNotes() {
+    var exportable = state.entries.filter(function(e) { return e.type === 'voice' || e.type === 'manual'; });
+    if (!exportable.length) { showToast('No notes to share', 'error'); return; }
+    if (!navigator.share) { showToast('Sharing not supported here', 'error'); return; }
+    navigator.share({ title: 'SpeakNote', text: buildText() }).catch(function(err) {
+        if (err && err.name !== 'AbortError') showToast('Share failed', 'error');
+    });
 }
 
 function exportText() {
@@ -991,8 +1089,19 @@ function setupInstall() {
         showToast('SpeakNote installed!', 'success');
     });
 }
+// Debug panel: the button is gone from the main row. Open it with a long-press
+// (about 0.7 s) on the status pill, or by adding ?debug to the address.
+function setupDebugAccess() {
+    var pill = document.getElementById('status'), t = null;
+    function clear() { clearTimeout(t); }
+    pill.addEventListener('pointerdown', function() { clear(); t = setTimeout(toggleDebug, 700); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function(ev) { pill.addEventListener(ev, clear); });
+    if (/[?&]debug\b/.test(location.search)) toggleDebug();
+}
+
 // Tap the header logo/name: drop the cached copy of the app and reload, so the
-// newest version is fetched. Notes and settings (localStorage) are untouched.
+// newest version is fetched. Notes are saved in localStorage (see saveEntries),
+// which this does not touch, so they are still there after the reload.
 function refreshApp() {
     if (state.isListening && !confirm('Recording is on. Refreshing will stop it. Refresh anyway?')) return;
     showToast('Refreshing…', 'info');
