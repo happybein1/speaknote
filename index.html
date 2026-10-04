@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.4</title>
+    <title>SpeakNote v1.5</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -21,8 +21,8 @@
     <meta name="twitter:image" content="og-image.png">
     <meta name="description" content="Voice-to-text note taking with multi-language support, timestamped entries, and clipboard export. Works offline as a PWA.">
 
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="manifest" href="manifest.json?v=1.5">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png?v=1.5">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f0f23'/%3E%3Crect x='24' y='8' width='16' height='26' rx='8' fill='%2300d4aa'/%3E%3Cpath d='M16 30c0 8.837 7.163 16 16 16s16-7.163 16-16' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round' fill='none'/%3E%3Cline x1='32' y1='46' x2='32' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='24' y1='54' x2='40' y2='54' stroke='%2300d4aa' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,6 +56,8 @@
             border-radius:8px; display:flex; align-items:center; justify-content:center;
             font-size:16px; box-shadow:0 0 12px var(--accent-glow); flex-shrink:0;
         }
+        .logo-img{width:32px;height:32px;border-radius:8px;flex-shrink:0;box-shadow:0 0 12px var(--accent-glow);}
+        .header-left:active .logo-img{transform:scale(.92);}
         .header h1{
             font-family:'DM Mono',monospace; font-size:16px; font-weight:500;
             letter-spacing:-0.3px; color:var(--text); display:flex; align-items:center; gap:8px;
@@ -226,9 +228,10 @@
 </head>
 <body>
     <div class="header">
-        <div class="header-left">
-            <div class="logo-icon">🎙️</div>
-            <h1>SpeakNote <span class="version">v1.4</span></h1>
+        <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
+        <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
+            <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
+            <h1>SpeakNote <span class="version">v1.5</span></h1>
         </div>
         <div class="status idle" id="status">Idle</div>
     </div>
@@ -987,6 +990,24 @@ function setupInstall() {
         document.getElementById('install-banner').classList.remove('show');
         showToast('SpeakNote installed!', 'success');
     });
+}
+// Tap the header logo/name: drop the cached copy of the app and reload, so the
+// newest version is fetched. Notes and settings (localStorage) are untouched.
+function refreshApp() {
+    if (state.isListening && !confirm('Recording is on. Refreshing will stop it. Refresh anyway?')) return;
+    showToast('Refreshing…', 'info');
+    var tasks = [];
+    if ('serviceWorker' in navigator) {
+        tasks.push(navigator.serviceWorker.getRegistrations()
+            .then(function(rs) { return Promise.all(rs.map(function(r) { return r.unregister(); })); })
+            .catch(function() {}));
+    }
+    if (window.caches) {
+        tasks.push(caches.keys()
+            .then(function(ks) { return Promise.all(ks.map(function(k) { return caches.delete(k); })); })
+            .catch(function() {}));
+    }
+    Promise.all(tasks).then(function() { location.reload(); });
 }
 function installPWA() {
     if (!deferredPrompt) return;
