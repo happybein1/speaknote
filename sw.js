@@ -1,4 +1,4 @@
-const CACHE_NAME = 'speaknote-v1-6';
+const CACHE_NAME = 'speaknote-v1-7';
 // Relative paths so the worker works from whatever folder it is served from.
 const STATIC_ASSETS = ['./', './index.html', './manifest.json',
   './icons/icon-72x72.png', './icons/icon-96x96.png', './icons/icon-128x128.png',

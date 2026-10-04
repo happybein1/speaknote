@@ -4,6 +4,16 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 
 ---
 
+## v1.7
+
+sw `speaknote-v1-7`; **the language now defaults to the device language on first use.** User asked whether language detection could be automatic. True auto-detection isn't possible with the browser's speech recognition (the language must be set before listening, and wrong-language audio comes out as garbled text), so this is the safe version of it: on a first visit with no saved settings, `detectDeviceLang()` goes through `navigator.languages` in order and picks the first supported language, exact match first (e.g. `nl-NL`), otherwise the same base language (`nl-BE` gives `nl-NL`, `pt-PT` gives `pt-BR`, `en-GB` gives `en-US`). No match keeps English. Anyone with saved settings is unaffected, and the buttons still work as before; whatever is picked is remembered. The sideways-scrolling language bar now also scrolls the active language into view on open (16 languages no longer fit on screen).
+
+Not done: suggesting a switch when the transcript looks like a different language (browser language-detector support is patchy), and server-side auto-detection (needs a cloud service, against the no-account, on-device design).
+
+**Verification:** inline script passes `node --check`; matching logic checked against sample language lists; not run in a browser.
+
+---
+
 ## v1.6
 
 sw `speaknote-v1-6`; **notes are now saved, plus the improvements agreed after the v1.5 review.** User asked for "all" of them.

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.6</title>
+    <title>SpeakNote v1.7</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -237,7 +237,7 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version" id="app-version">v1.6</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.7</span></h1>
         </div>
         <div class="status idle" id="status">Idle</div>
     </div>
@@ -320,7 +320,7 @@
 // must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 const APP_BUILD   = '2026-10-04';
 const STORE_KEY   = 'speaknote_entries';
 
@@ -1063,14 +1063,41 @@ function showToast(msg, type) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
+// First use only: pick the supported language that best matches the device /
+// browser language list (exact match first, e.g. "nl-NL"; otherwise the same
+// base language, e.g. "nl-BE" or "pt-PT" -> "nl-NL" / "pt-BR"). Returns null
+// when nothing matches, and the default (English) stays.
+function detectDeviceLang() {
+    var prefs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language];
+    var supported = Object.keys(LANG_NAMES);
+    for (var i = 0; i < prefs.length; i++) {
+        var tag = String(prefs[i] || '').toLowerCase();
+        if (!tag) continue;
+        var exact = supported.filter(function(c) { return c.toLowerCase() === tag; })[0];
+        if (exact) return exact;
+        var base = tag.split('-')[0];
+        var loose = supported.filter(function(c) { return c.toLowerCase().split('-')[0] === base; })[0];
+        if (loose) return loose;
+    }
+    return null;
+}
+
 function loadSettings() {
+    var hadSaved = false;
     try {
         var s = localStorage.getItem('speaknote_settings');
-        if (s) Object.assign(state.settings, JSON.parse(s));
+        if (s) { Object.assign(state.settings, JSON.parse(s)); hadSaved = true; }
     } catch(e) { dbg('loadSettings error: ' + e.message, 'warn'); }
+    if (!hadSaved) {
+        var auto = detectDeviceLang();
+        if (auto) { state.settings.lang = auto; dbg('Language from device: ' + auto, 'info'); }
+    }
     state._langInitDone = false;
     setLang(state.settings.lang);   // no toast on init
     state._langInitDone = true;
+    // The language bar scrolls sideways; make sure the active one is in view.
+    var act = document.querySelector('.lang-btn.active');
+    if (act && act.scrollIntoView) act.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 function saveSettings() {
     try { localStorage.setItem('speaknote_settings', JSON.stringify(state.settings)); }
