@@ -4,6 +4,11 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 
 ---
 
+
+## v1.8
+
+**Cloudflare visit counter** (owner, 2026-10-29: count every app on happybein.com/admin/stats/). The shared `yv-internal` snippet (`_shared/internal.js`, rolled out by `_shared/apply-internal.py`) is inlined before `</head>`: it loads Cloudflare Web Analytics with the yeahvibe.com site token (cookieless, nothing stored on the device, so no consent needed), except on browsers carrying the owner's `?internal` mark (cookie `yv_internal=1` on .yeahvibe.com), which show a small teal dot under the version number instead. Visits now appear under this app's own address in the stats. Service-worker cache bumped.
+
 ## v1.7
 
 sw `speaknote-v1-7`; **the language now defaults to the device language on first use.** User asked whether language detection could be automatic. True auto-detection isn't possible with the browser's speech recognition (the language must be set before listening, and wrong-language audio comes out as garbled text), so this is the safe version of it: on a first visit with no saved settings, `detectDeviceLang()` goes through `navigator.languages` in order and picks the first supported language, exact match first (e.g. `nl-NL`), otherwise the same base language (`nl-BE` gives `nl-NL`, `pt-PT` gives `pt-BR`, `en-GB` gives `en-US`). No match keeps English. Anyone with saved settings is unaffected, and the buttons still work as before; whatever is picked is remembered. The sideways-scrolling language bar now also scrolls the active language into view on open (16 languages no longer fit on screen).
