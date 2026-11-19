@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.10</title>
+    <title>SpeakNote v1.12</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -194,6 +194,10 @@
         .entry.voice-entry{border-left:2px solid var(--accent);}
         .entry.manual-entry{border-left:2px solid rgba(255,217,61,0.4);}
         .entry-main{flex:1;min-width:0;padding:3px 0;}
+        .voice-entry .entry-text{cursor:text;}
+        .entry textarea.fixing{border-bottom:1px dashed var(--accent);}
+        .time-sep{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin:8px 2px 3px;opacity:.8;}
+        .time-sep:first-of-type{margin-top:0;}
         .entry-side{display:flex;align-items:center;gap:0;flex:none;}
         .entry-side .entry-time{margin-right:2px;}
         .entry-side .entry-actions{margin-left:0;}
@@ -331,7 +335,7 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version" id="app-version">v1.10</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.12</span></h1>
         </div>
         <!-- v1.9 (Calm Pass): "All apps" moved from a floating button (it covered the bottom right corner) into the header -->
         <div class="header-right"><div class="status idle" id="status">Idle</div><a class="allapps" href="https://yeahvibe.com" title="All YeahVibe apps" aria-label="All apps">&#x229E;<span class="aa-t"> All apps</span></a></div>
@@ -427,7 +431,7 @@
 // must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.10';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
+const APP_VERSION = '1.12';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
 const APP_BUILD   = '2026-10-04';
 const STORE_KEY   = 'speaknote_entries';
 
@@ -645,6 +649,17 @@ function updateEntryCount() {
     els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
     els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
     refreshActions();
+    refreshTimes();
+}
+// v1.11: one small time line above the newest note of each minute, instead of a time beside every note.
+function refreshTimes() {
+    els.notes.querySelectorAll('.time-sep').forEach(function(x) { x.remove(); });
+    var last = null;
+    els.notes.querySelectorAll('.entry:not(.system-entry)').forEach(function(e) {
+        var m = e.dataset.min || '';
+        if (m && m !== last) { var d = document.createElement('div'); d.className = 'time-sep'; d.textContent = m; e.before(d); }
+        last = m;
+    });
 }
 // v1.9 (Calm Pass): Copy, Share and Export are greyed out until there is a note with text.
 function refreshActions() {
@@ -723,12 +738,13 @@ function renderEntry(entry, prepend, noFocus) {
     // (green) from typed (yellow), so the badges are gone. System messages are a single small grey line, no card.
     var shortTime = String(entry.time).replace(/:(\d\d)(\s*[AP]M)?$/i, '$2');
     var metaHtml = '<span class="entry-time" title="' + escapeHtml(entry.time) + '">' + shortTime + '</span>';
+    div.dataset.min = shortTime;   // v1.11: refreshTimes() shows a small time line only where the minute changes
     var body = entry.editable
         ? '<textarea rows="1" placeholder="Type a note" oninput="autoResize(this);updateEntry(this)">' + escapeHtml(entry.text) + '</textarea>'
         : '<div class="entry-text">' + escapeHtml(entry.text) + '</div>';
     div.innerHTML = isSystem
         ? metaHtml + body
-        : '<div class="entry-main">' + body + '</div><div class="entry-side">' + metaHtml + actionsHtml + '</div>';
+        : '<div class="entry-main">' + body + '</div><div class="entry-side">' + actionsHtml + '</div>';
 
     var header = els.notes.querySelector('.notes-header');
     var live = document.getElementById('live-line');   // v1.10: new notes go below the live line
@@ -754,6 +770,30 @@ function updateEntry(ta) {
     if (e) { e.text = ta.value; saveEntries(); }
 }
 
+// v1.12 (owner, 2026-11-19: "go" to fixing spoken notes): tap the text of a spoken note to correct it. It turns into an
+// edit box with the keyboard open; leaving the box (or Enter) saves and shows the text again. Escape cancels.
+document.addEventListener('click', function(ev) {
+    var t = ev.target.closest && ev.target.closest('.voice-entry .entry-text');
+    if (!t) return;
+    var el = t.closest('.entry'), ts = Number(el.dataset.ts);
+    var e = state.entries.find(function(x) { return x.ts === ts; }); if (!e) return;
+    var ta = document.createElement('textarea'); ta.rows = 1; ta.value = e.text; ta.className = 'fixing';
+    ta.setAttribute('aria-label', 'Correct this note');
+    t.replaceWith(ta); autoResize(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    var done = false;
+    function finish(keep) {
+        if (done) return; done = true;
+        if (keep) { var v = ta.value.trim(); if (v) { e.text = v; saveEntries(); } }
+        var d = document.createElement('div'); d.className = 'entry-text'; d.textContent = e.text;
+        ta.replaceWith(d); refreshActions();
+    }
+    ta.addEventListener('input', function() { autoResize(ta); });
+    ta.addEventListener('blur', function() { finish(true); });
+    ta.addEventListener('keydown', function(k) {
+        if (k.key === 'Enter' && !k.shiftKey) { k.preventDefault(); finish(true); }
+        else if (k.key === 'Escape') { finish(false); }
+    });
+});
 function escapeHtml(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function addManualNote() { addEntry('manual', '', true); }
 
@@ -886,6 +926,17 @@ function showLive(t) {
     if (t) els.emptyState.style.display = 'none';
     else updateEntryCount();
 }
+// v1.11 (owner, 2026-11-19: "go" to cleaner notes): the speech service writes without punctuation, so each spoken note
+// starts with a capital and ends with a full stop (。 in Japanese and Chinese, । in Hindi), unless it already ends in one.
+function tidySentence(t) {
+    t = t.trim(); if (!t) return t;
+    t = t.charAt(0).toLocaleUpperCase(state.settings.lang) + t.slice(1);
+    if (!/[.!?…。！？।؟]$/.test(t)) {
+        var L = state.settings.lang.slice(0, 2);
+        t += (L === 'ja' || L === 'zh') ? '。' : L === 'hi' ? '।' : L === 'ar' ? '.' : '.';
+    }
+    return t;
+}
 function processResult(transcript) {
     var now = Date.now();
     if (now - state.lastCmdTime < 300) return; // debounce
@@ -898,7 +949,7 @@ function processResult(transcript) {
         addEntry('system', 'Stopped by voice command');
     } else {
         state.consecutiveErrors = 0;
-        addEntry('voice', t);
+        addEntry('voice', tidySentence(t));
     }
 }
 
@@ -946,7 +997,7 @@ function _buildSession() {
             state.sessionLogged = true;
             updateStatus('listening', 'Listening');
             updateMainBtn();
-            addEntry('system', '🎙️ Microphone active — ' + LANG_NAMES[state.settings.lang]);
+            // v1.11: no "Microphone active" line; the badge and the bottom button show it
         }
     };
 
@@ -1168,7 +1219,7 @@ function stopListening() {
     dbg('stopListening called', 'info');
     state.consecutiveErrors = 0;
     _haltSession();
-    addEntry('system', '⏹ Stopped');
+    // v1.11: no "Stopped" line; the badge and the bottom button show it
 }
 
 // ── Wake lock ─────────────────────────────────────────────────────────────────

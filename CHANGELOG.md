@@ -5,6 +5,31 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 ---
 
 
+## v1.12
+
+**Tap a spoken note to correct it** (owner, 2026-11-19: "what else to improve" → proposal → "go"). Until now only typed
+notes could be edited (an earlier tip of mine said "tap any note to correct it", which was wrong for spoken notes).
+Tapping the text of a spoken note turns it into an edit box with the keyboard open; Enter or tapping elsewhere saves
+(stored and kept after a reload; Copy, Share and Export use the corrected text), Escape cancels, an emptied box keeps
+the old text. Includes v1.11, which was never published on its own.
+- Tested in Chromium: "…be life text." corrected to "…be live text.", kept after a reload, Escape cancels, tapping
+  outside saves; the v1.9–v1.11 checks still pass; no errors. sw `speaknote-v1-12`.
+
+## v1.11
+
+**Cleaner notes** (owner, 2026-11-19, with a phone screenshot of v1.10: "What further improvement would you propose?" →
+proposal → "go").
+- **Capital and full stop:** each spoken note starts with a capital (in the recording language) and ends with a full
+  stop, or 。 in Japanese and Chinese, । in Hindi, unless it already ends in . ! ? … (`tidySentence()`). Typed notes are
+  left as typed; notes saved before this version are unchanged.
+- **Time only when it changes:** a small time line (hours:minutes) above the newest note of each minute
+  (`refreshTimes()`, run with every list change) instead of a time beside every note, so the text uses the full width.
+- **No "Microphone active" and "Stopped" lines:** the badge and the bottom button already show it. Problems (no
+  internet, microphone blocked) still appear in the list, as does "Stopped by voice command".
+- Tested in Chromium with a simulated speech service: "buy some milk and bread" → "Buy some milk and bread.", "is it
+  ok?" kept, fr/de/ja/zh/hi endings correct, one time line for notes in the same minute; the v1.9–v1.10 checks still
+  pass; no errors. sw `speaknote-v1-11`.
+
 ## v1.10
 
 **Live text while speaking** (owner, 2026-11-19: "how can the voice recording be made work best?" → proposal → "go").
