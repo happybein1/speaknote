@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.8</title>
+    <title>SpeakNote v1.9</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -73,6 +73,10 @@
             font-weight:600; text-transform:uppercase; letter-spacing:0.8px;
             font-family:'DM Mono',monospace; transition:all 0.3s ease;
         }
+        .header-right{display:flex;align-items:center;gap:6px;margin-left:8px;flex-shrink:0;}
+        @media (max-width:380px){.header{padding:14px 12px;}.header h1{gap:6px;}.allapps{padding:5px 9px;}}
+        .allapps{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;color:var(--muted);border:1px solid var(--border2);background:var(--card2);text-decoration:none;white-space:nowrap;}
+        .allapps:hover{color:var(--text);}
         .status.idle{background:var(--card2);color:var(--muted);border:1px solid var(--border2);}
         .status.listening{
             background:var(--accent);color:var(--bg);
@@ -85,16 +89,23 @@
         .debug-sec-btn{flex:0 0 auto;min-width:52px;opacity:0.5;}
         .debug-sec-btn.active{opacity:1;background:rgba(255,217,61,0.15);border-color:var(--warn);color:var(--warn);}
         /* Lang bar */
+        .rec-row{display:flex;gap:8px;position:relative;}
+        .rec-row .main-btn{flex:1;width:auto;}
+        .lang-pick{flex:none;display:flex;align-items:center;gap:5px;padding:0 12px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;}
+        .lang-pick span:first-child{font-size:20px;line-height:1;}
+        .lang-pick .chev{font-size:10px;color:var(--muted);}
         .lang-bar{
-            display:flex;gap:6px;padding:9px 16px;background:var(--bg2);
-            border-bottom:1px solid var(--border);overflow-x:auto;
+            position:absolute;left:0;top:calc(100% + 6px);z-index:50;width:min(320px,100%);
+            display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px;background:var(--bg2);
+            border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 10px 30px rgba(0,0,0,.45);
         }
+        .lang-bar[hidden]{display:none;}
         .lang-bar::-webkit-scrollbar{display:none;}
         .lang-btn{
             padding:4px 11px;border-radius:20px;border:1px solid var(--border);
             background:transparent;color:var(--muted);font-size:11px;font-weight:600;
             cursor:pointer;white-space:nowrap;transition:all 0.2s ease;
-            font-family:'DM Mono',monospace;
+            font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;padding:8px 4px;font-size:12px;
         }
         .lang-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card);}
         .lang-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);box-shadow:0 0 10px var(--accent-glow);}
@@ -125,6 +136,7 @@
             transition:all 0.18s ease;display:flex;flex-direction:column;align-items:center;gap:3px;
         }
         .sec-btn .sec-icon{font-size:15px;}
+        .sec-btn:disabled{opacity:0.35;cursor:default;pointer-events:none;}   /* v1.9: Copy, Share, Export wait for a note */
         .sec-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card2);}
         .sec-btn:active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);transform:scale(0.97);}
         /* Debug panel */
@@ -182,8 +194,8 @@
         /* Empty state */
         .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:var(--muted);text-align:center;gap:10px;}
         .empty-icon{font-size:36px;opacity:0.4;}
-        .empty-text{font-size:13px;font-family:'DM Mono',monospace;opacity:0.6;}
-        .privacy-note{font-size:11px;line-height:1.5;opacity:0.5;max-width:300px;}
+        .empty-text{font-size:13px;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;opacity:0.75;}   /* v1.9: sans-serif (Calm Pass) */
+        .empty-text.privacy-note{font-size:11px;line-height:1.5;color:var(--muted);opacity:0.65;max-width:280px;margin-top:6px;}   /* v1.9: smaller and lighter */
         /* Per-entry actions */
         .entry-actions{margin-left:auto;display:flex;gap:2px;}
         .entry-actions button{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:6px 9px;border-radius:6px;line-height:1;}
@@ -305,12 +317,19 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version" id="app-version">v1.8</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.9</span></h1>
         </div>
-        <div class="status idle" id="status">Idle</div>
+        <!-- v1.9 (Calm Pass): "All apps" moved from a floating button (it covered the bottom right corner) into the header -->
+        <div class="header-right"><div class="status idle" id="status">Idle</div><a class="allapps" href="https://yeahvibe.com" title="All YeahVibe apps">&#x229E; All apps</a></div>
     </div>
 
-    <div class="lang-bar" id="lang-bar">
+
+    <div class="controls">
+        <div class="rec-row">
+        <button class="lang-pick" id="lang-pick" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Language" onclick="toggleLangMenu(event)"><span id="lang-pick-flag">🇺🇸</span><span id="lang-pick-code">EN</span><span class="chev">▾</span></button>
+        <!-- v1.9 (owner, 2026-11-19: "the language bar would better turn into a logo button"): one button beside Start
+         Recording shows the language; tapping it opens this menu. -->
+    <div class="lang-bar" id="lang-bar" hidden>
         <button class="lang-btn active" data-lang="en-US" onclick="setLang('en-US')">🇺🇸 EN</button>
         <button class="lang-btn" data-lang="es-ES" onclick="setLang('es-ES')">🇪🇸 ES</button>
         <button class="lang-btn" data-lang="fr-FR" onclick="setLang('fr-FR')">🇫🇷 FR</button>
@@ -328,19 +347,18 @@
         <button class="lang-btn" data-lang="hi-IN" onclick="setLang('hi-IN')">🇮🇳 HI</button>
         <button class="lang-btn" data-lang="ar-SA" onclick="setLang('ar-SA')">🇸🇦 AR</button>
     </div>
-
-    <div class="controls">
         <button class="main-btn start" id="main-btn" onclick="toggleListening()">
             <span class="waveform" id="waveform"><span></span><span></span><span></span><span></span><span></span></span>
             <span id="btn-icon">▶</span>
             <span id="btn-text">Start Recording</span>
         </button>
+        </div>
         <div class="secondary">
             <button class="sec-btn" onclick="addManualNote()"><span class="sec-icon">✎</span><span>Note</span></button>
             <button class="sec-btn" onclick="undoLast()"><span class="sec-icon">↩</span><span>Undo</span></button>
-            <button class="sec-btn" onclick="copyToClipboard()"><span class="sec-icon">📋</span><span>Copy</span></button>
-            <button class="sec-btn" id="share-btn" onclick="shareNotes()" style="display:none"><span class="sec-icon">↗</span><span>Share</span></button>
-            <button class="sec-btn" onclick="exportText()"><span class="sec-icon">⬇</span><span>Export</span></button>
+            <button class="sec-btn needs-text" onclick="copyToClipboard()" disabled><span class="sec-icon">📋</span><span>Copy</span></button>
+            <button class="sec-btn needs-text" id="share-btn" onclick="shareNotes()" style="display:none" disabled><span class="sec-icon">↗</span><span>Share</span></button>
+            <button class="sec-btn needs-text" onclick="exportText()" disabled><span class="sec-icon">⬇</span><span>Export</span></button>
         </div>
     </div>
 
@@ -388,7 +406,7 @@
 // must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.9';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
 const APP_BUILD   = '2026-10-04';
 const STORE_KEY   = 'speaknote_entries';
 
@@ -565,11 +583,26 @@ function setupVisibilityHandler() {
 }
 
 // ── Language ──────────────────────────────────────────────────────────────────
+// v1.9: the language menu opens from the button beside Start Recording, closes on a pick, a tap outside or Escape.
+function toggleLangMenu(ev, open) {
+    if (ev) ev.stopPropagation();
+    var m = document.getElementById('lang-bar'), b = document.getElementById('lang-pick');
+    var show = open === undefined ? m.hidden : open;
+    m.hidden = !show; b.setAttribute('aria-expanded', String(show));
+}
+document.addEventListener('click', function(e) { var m = document.getElementById('lang-bar'); if (m && !m.hidden && !e.target.closest('#lang-bar')) toggleLangMenu(null, false); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') toggleLangMenu(null, false); });
 function setLang(lang) {
     state.settings.lang = lang;
     document.querySelectorAll('.lang-btn').forEach(function(b) {
         b.classList.toggle('active', b.dataset.lang === lang);
+        if (b.dataset.lang === lang) {
+            var parts = b.textContent.trim().split(/\s+/);
+            document.getElementById('lang-pick-flag').textContent = parts[0];
+            document.getElementById('lang-pick-code').textContent = parts[1] || '';
+        }
     });
+    if (state._langInitDone) toggleLangMenu(null, false);
     saveSettings();
     // Only show toast if user clicked (not on init)
     if (state._langInitDone) showToast('Language: ' + LANG_NAMES[lang], 'success');
@@ -590,7 +623,14 @@ function updateEntryCount() {
     var n = state.entries.filter(function(e) { return e.type !== 'system'; }).length;
     els.noteCount.textContent = n === 1 ? '1 entry' : n + ' entries';
     els.emptyState.style.display = state.entries.length === 0 ? 'flex' : 'none';
+    refreshActions();
 }
+// v1.9 (Calm Pass): Copy, Share and Export are greyed out until there is a note with text.
+function refreshActions() {
+    var has = state.entries.some(function(e) { return (e.type === 'voice' || e.type === 'manual') && e.text && e.text.trim(); });
+    document.querySelectorAll('.sec-btn.needs-text').forEach(function(b) { b.disabled = !has; });
+}
+document.addEventListener('input', function(e) { if (e.target.closest && e.target.closest('#notes')) setTimeout(refreshActions, 0); });
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 // Voice and typed notes are kept in localStorage so a reload, refresh or the
@@ -1226,6 +1266,6 @@ init();
     </script>
 
 <!-- HappyBein backlink -->
-<a href="https://yeahvibe.com" style="position:fixed;bottom:14px;right:14px;height:30px;padding:0 12px;border-radius:15px;background:#2ABFBF;color:#fff;display:flex;align-items:center;gap:5px;font-family:Nunito,Arial,sans-serif;font-weight:700;font-size:12px;text-decoration:none;box-shadow:0 2px 8px rgba(42,191,191,0.4);z-index:9999;opacity:0.85;" onmouseover="this.style.opacity='1';" onmouseout="this.style.opacity='.85';">&#x229E; All apps</a>
+
 </body>
 </html>

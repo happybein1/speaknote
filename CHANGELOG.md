@@ -5,6 +5,23 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 ---
 
 
+## v1.9
+
+**"Calm Pass" tweaks** (owner, 2026-11-19, four points to match the rest of the apps):
+1. **Font:** the empty-state line and the privacy text use DM Sans (the app's sans-serif) instead of DM Mono.
+2. **Disabled buttons:** Copy, Share and Export are greyed out (opacity .35, not clickable) until there is a voice or typed
+   note with text; `refreshActions()` runs with every entry change and on typing in a note. Note and Undo stay active.
+3. **Privacy text:** 11px, muted grey at lower opacity, narrower, so it no longer dominates the empty screen.
+4. **All apps:** the floating button that covered the bottom right corner is now a small pill in the header, next to the
+   Idle badge. Header padding slightly tighter below 380px so everything fits on a 360px phone.
+5. **Language button** (owner, same day: "the language bar would better turn into a logo button"): the scrolling row of
+   16 language chips is gone. A button left of Start Recording shows the current flag and code ("🇺🇸 EN ▾"); tapping it
+   opens a 4 × 4 menu of the same chips. It closes on a pick, a tap outside or Escape, and shows the saved language after
+   a reload. Saves a full row at the top of the screen.
+- Fix: `APP_VERSION` was still '1.7', so v1.8 showed "v1.7" in the header (the script overwrites the badge). Now 1.9.
+- Tested in Chromium at 360px: buttons off on the empty screen and with an empty typed note, on once it has text; All
+  apps inside the header; no errors. sw `speaknote-v1-9`.
+
 ## v1.8
 
 **Cloudflare visit counter** (owner, 2026-10-29: count every app on happybein.com/admin/stats/). The shared `yv-internal` snippet (`_shared/internal.js`, rolled out by `_shared/apply-internal.py`) is inlined before `</head>`: it loads Cloudflare Web Analytics with the yeahvibe.com site token (cookieless, nothing stored on the device, so no consent needed), except on browsers carrying the owner's `?internal` mark (cookie `yv_internal=1` on .yeahvibe.com), which show a small teal dot under the version number instead. Visits now appear under this app's own address in the stats. Service-worker cache bumped.
