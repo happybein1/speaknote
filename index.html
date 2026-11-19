@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.12</title>
+    <title>SpeakNote v1.13</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -140,6 +140,10 @@
             transition:all 0.18s ease;display:flex;flex-direction:column;align-items:center;gap:3px;
         }
         .sec-btn .sec-icon{font-size:15px;}
+        /* v1.13 (owner, 2026-11-19: "go for slimmer button"): about half the height */
+        .controls{padding:8px 12px;gap:6px;}
+        .sec-btn{padding:5px 2px;gap:1px;font-size:10px;letter-spacing:0;}
+        .sec-btn .sec-icon{font-size:14px;line-height:1.1;}
         .sec-btn:disabled{opacity:0.35;cursor:default;pointer-events:none;}   /* v1.9: Copy, Share, Export wait for a note */
         .sec-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card2);}
         .sec-btn:active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);transform:scale(0.97);}
@@ -196,6 +200,8 @@
         .entry-main{flex:1;min-width:0;padding:3px 0;}
         .voice-entry .entry-text{cursor:text;}
         .entry textarea.fixing{border-bottom:1px dashed var(--accent);}
+        .day-sep{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text);opacity:.8;margin:14px 2px 2px;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;}
+        .day-sep:first-of-type{margin-top:2px;}
         .time-sep{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin:8px 2px 3px;opacity:.8;}
         .time-sep:first-of-type{margin-top:0;}
         .entry-side{display:flex;align-items:center;gap:0;flex:none;}
@@ -335,7 +341,7 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version" id="app-version">v1.12</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.13</span></h1>
         </div>
         <!-- v1.9 (Calm Pass): "All apps" moved from a floating button (it covered the bottom right corner) into the header -->
         <div class="header-right"><div class="status idle" id="status">Idle</div><a class="allapps" href="https://yeahvibe.com" title="All YeahVibe apps" aria-label="All apps">&#x229E;<span class="aa-t"> All apps</span></a></div>
@@ -431,7 +437,7 @@
 // must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.12';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
+const APP_VERSION = '1.13';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
 const APP_BUILD   = '2026-10-04';
 const STORE_KEY   = 'speaknote_entries';
 
@@ -652,13 +658,23 @@ function updateEntryCount() {
     refreshTimes();
 }
 // v1.11: one small time line above the newest note of each minute, instead of a time beside every note.
+// v1.13 (owner, 2026-11-19: "notes grouped by day"): a day heading (Today, Yesterday, Mon 17 Nov) where the day changes.
+function dayLabel(ts) {
+    var d = new Date(ts), t = new Date(), y = new Date(); y.setDate(t.getDate() - 1);
+    var key = function(x) { return x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate(); };
+    if (key(d) === key(t)) return 'Today';
+    if (key(d) === key(y)) return 'Yesterday';
+    return d.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'}) + (d.getFullYear() !== t.getFullYear() ? ' ' + d.getFullYear() : '');
+}
+document.addEventListener('visibilitychange', function() { if (!document.hidden && els.notes) refreshTimes(); });   // labels stay right after midnight
 function refreshTimes() {
-    els.notes.querySelectorAll('.time-sep').forEach(function(x) { x.remove(); });
-    var last = null;
+    els.notes.querySelectorAll('.time-sep,.day-sep').forEach(function(x) { x.remove(); });
+    var lastDay = null, last = null;
     els.notes.querySelectorAll('.entry:not(.system-entry)').forEach(function(e) {
-        var m = e.dataset.min || '';
+        var ts = Number(e.dataset.ts) || 0, day = ts ? dayLabel(ts) : '', m = e.dataset.min || '';
+        if (day && day !== lastDay) { var h = document.createElement('div'); h.className = 'day-sep'; h.textContent = day; e.before(h); last = null; }
         if (m && m !== last) { var d = document.createElement('div'); d.className = 'time-sep'; d.textContent = m; e.before(d); }
-        last = m;
+        lastDay = day; last = m;
     });
 }
 // v1.9 (Calm Pass): Copy, Share and Export are greyed out until there is a note with text.

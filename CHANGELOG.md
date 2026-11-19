@@ -5,6 +5,17 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 ---
 
 
+## v1.13
+
+**Slimmer buttons; notes grouped by day** (owner, 2026-11-19: "go for slimmer button and notes grouped by day").
+- The Note / Undo / Copy / Share / Export row is about half as tall: 41 px at 360 px wide (was about 75), smaller icon
+  and label, tighter padding around it.
+- Day headings in the notes list: "Today", "Yesterday", then "Tue, 17 Nov" (the year added for other years), with the
+  v1.11 time lines under each day. Worked out from each note's saved timestamp, so older notes get headings too; the
+  labels are refreshed when the app comes back to the front (right after midnight).
+- Tested in Chromium at 360 px with notes from today, yesterday and two days ago: headings and time lines in the right
+  order; the v1.9–v1.12 checks still pass; no errors. sw `speaknote-v1-13`.
+
 ## v1.12
 
 **Tap a spoken note to correct it** (owner, 2026-11-19: "what else to improve" → proposal → "go"). Until now only typed
