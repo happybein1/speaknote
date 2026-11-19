@@ -5,6 +5,31 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 ---
 
 
+## v1.10
+
+**Live text while speaking** (owner, 2026-11-19: "how can the voice recording be made work best?" → proposal → "go").
+- Recognition now asks for interim results (`interimResults: true`, was false). While you speak, the words appear in grey
+  italics in a dashed box under "Session notes", with a pulsing dot; when the sentence is final it becomes a normal
+  note and the box empties. The box hides on stop, on errors and when a session restarts. New notes go below it.
+- Guard against repeated finals (Chrome on Android can report the same final again with interim results on): each
+  final result index is handled once per session, and a final identical to the previous one within 3 s is skipped.
+- **Compact notes list** (owner, same day, with a phone screenshot: "also make the recording history more compact, to
+  avoid scrolling"): each note is one row, text first, then the time as hours:minutes (full time on hover) and the copy
+  and delete buttons on the right; the VOICE/NOTE badges are gone (the green or yellow left edge still shows which is
+  which). System messages ("Microphone active", "Stopped") are one small grey line without a card. Measured at 412 px:
+  a one-line note is 40 px (was about 95), a system line 17 px (was about 75). Typed notes use 16 px so iPhones don't zoom.
+- "Stop recording" stays on one line on phones (smaller letter spacing below 440 px); it wrapped onto two lines.
+- **Record button and language at the bottom** (owner, same day: "also put the recording button and language selector bar
+  at the bottom"): both sit in a fixed bar at the bottom of the screen (safe-area aware), within thumb reach; the
+  language menu opens upwards. Note, Undo, Copy, Share and Export stay at the top. The page has bottom padding so the
+  last note is never hidden. The install banner now appears above the bar, and is fully hidden (no invisible layer
+  catching taps) when not shown.
+- Header: below 400 px "All apps" shows only the ⊞ icon, because the wider LISTENING badge pushed it off a 360 px
+  screen (also true in v1.9 while recording).
+- Tested in Chromium at 360 px with a simulated speech service: interim text shows, the final becomes one note, a
+  repeated final is not added twice, the next interim and final work, the box hides on stop; v1.9 checks (greyed
+  buttons, language menu) still pass; no errors. Real speech can only be tried on a phone. sw `speaknote-v1-10`.
+
 ## v1.9
 
 **"Calm Pass" tweaks** (owner, 2026-11-19, four points to match the rest of the apps):
