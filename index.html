@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f0f23">
-    <title>SpeakNote v1.13</title>
+    <title>SpeakNote v1.14</title>
 
     <!-- Open Graph -->
     <meta property="og:title" content="SpeakNote — Voice Notes, Instantly">
@@ -341,7 +341,7 @@
         <!-- Tap the logo or name to refresh the app (v1.5): clears the cached copy and reloads. -->
         <div class="header-left" id="refresh-btn" role="button" tabindex="0" title="Tap to refresh the app" onclick="refreshApp()" onkeydown="if(event.key==='Enter'||event.key===' ')refreshApp()" style="cursor:pointer;">
             <img class="logo-img" src="icons/icon-96x96.png?v=1.5" alt="SpeakNote" width="32" height="32">
-            <h1>SpeakNote <span class="version" id="app-version">v1.13</span></h1>
+            <h1>SpeakNote <span class="version" id="app-version">v1.14</span></h1>
         </div>
         <!-- v1.9 (Calm Pass): "All apps" moved from a floating button (it covered the bottom right corner) into the header -->
         <div class="header-right"><div class="status idle" id="status">Idle</div><a class="allapps" href="https://yeahvibe.com" title="All YeahVibe apps" aria-label="All apps">&#x229E;<span class="aa-t"> All apps</span></a></div>
@@ -355,6 +355,7 @@
             <button class="sec-btn needs-text" onclick="copyToClipboard()" disabled><span class="sec-icon">📋</span><span>Copy</span></button>
             <button class="sec-btn needs-text" id="share-btn" onclick="shareNotes()" style="display:none" disabled><span class="sec-icon">↗</span><span>Share</span></button>
             <button class="sec-btn needs-text" onclick="exportText()" disabled><span class="sec-icon">⬇</span><span>Export</span></button>
+            <button class="sec-btn needs-text" id="ai-btn" onclick="summariseWithAI()" style="display:none" disabled title="Internal: sends your notes, with a summary request, to the AI app you pick"><span class="sec-icon">✨</span><span>AI</span></button>
         </div>
     </div>
 
@@ -437,7 +438,7 @@
 // must still be bumped by hand together with sw.js).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = '1.13';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
+const APP_VERSION = '1.14';   // v1.9: was left at 1.7, so v1.8 showed "v1.7"
 const APP_BUILD   = '2026-10-04';
 const STORE_KEY   = 'speaknote_entries';
 
@@ -565,6 +566,7 @@ function init() {
     document.getElementById('app-version').textContent = 'v' + APP_VERSION;
     loadEntries();   // restore saved notes first, so startup warnings below land on top
     if (navigator.share) document.getElementById('share-btn').style.display = '';
+    if (isInternal()) document.getElementById('ai-btn').style.display = '';   // v1.14: owner's marked browsers only
     setupDebugAccess();
     dbg('v' + APP_VERSION + ' build ' + APP_BUILD, 'info');
     dbg('Engine: ' + ENGINE + ' | iOS: ' + IS_IOS + ' | Mobile: ' + IS_MOBILE + ' | Secure: ' + IS_SECURE, 'info');
@@ -909,6 +911,31 @@ function shareNotes() {
     navigator.share({ title: 'SpeakNote', text: buildText() }).catch(function(err) {
         if (err && err.name !== 'AbortError') showToast('Share failed', 'error');
     });
+}
+
+// v1.14 (owner, 2026-11-19: "a summarize with ai button ... which would add a prompt and share to another app"),
+// internal only: shown on browsers with the owner's internal mark (the dot under the version). Puts a summary request in
+// front of today's notes (all notes when there are none today) and opens the share sheet, so any AI app can take it;
+// without a share sheet (most computers) it copies the text instead.
+function isInternal() {
+    try { if (localStorage.getItem('yv_internal') === '1') return true; } catch (e) {}
+    return /(?:^|;\s*)yv_internal=1/.test(document.cookie || '');
+}
+function aiText() {
+    var notes = state.entries.slice().reverse().filter(function(e) { return (e.type === 'voice' || e.type === 'manual') && e.text && e.text.trim(); });
+    var today = notes.filter(function(e) { return e.ts && dayLabel(e.ts) === 'Today'; });
+    var pick = today.length ? today : notes;
+    if (!pick.length) return '';
+    return 'Summarise these voice notes' + (today.length ? ' from today' : '') + '. Give the main points, any decisions, and a short to-do list. '
+        + 'Keep it brief and answer in the same language as the notes.\n\n'
+        + pick.map(function(e) { return e.time + '  ' + e.text.trim(); }).join('\n');
+}
+function summariseWithAI() {
+    var text = aiText();
+    if (!text) { showToast('No notes to summarise', 'error'); return; }
+    function copyIt() { copyText(text, function(ok) { showToast(ok ? 'Copied, paste it into your AI app' : 'Copy failed', ok ? 'success' : 'error'); }); }
+    if (!navigator.share) { copyIt(); return; }
+    navigator.share({ text: text }).catch(function(err) { if (!err || err.name !== 'AbortError') copyIt(); });
 }
 
 function exportText() {

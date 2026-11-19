@@ -5,6 +5,20 @@ Moved out of the repo-wide `CLAUDE.md` on 2026-09-25 to keep that file focused o
 ---
 
 
+## v1.14
+
+**Internal "✨ AI" summary button** (owner, 2026-11-19: "can a summarize with ai button works as well, not limited to
+claude, which would add a prompt and share to another app" → "go").
+- A sixth button in the action row, shown only on browsers with the owner's internal mark (localStorage or cookie
+  `yv_internal=1`, the dot under the version). Greyed out until there is a note, like Copy / Share / Export.
+- It puts a request in front of today's notes ("Summarise these voice notes from today. Give the main points, any
+  decisions, and a short to-do list. Keep it brief and answer in the same language as the notes."), all notes when there
+  are none today, oldest first with their times, and opens the share sheet so any AI app (ChatGPT, Gemini, Claude,
+  Le Chat...) can take it. No share sheet, or sharing fails: it copies the text and says "Copied, paste it into your AI
+  app". No server, no key: the notes only leave the app when the owner taps it.
+- Tested in Chromium at 360 px: hidden without the mark, shown with it; the shared text holds the request and only
+  today's two notes (yesterday's left out); no errors. sw `speaknote-v1-14`.
+
 ## v1.13
 
 **Slimmer buttons; notes grouped by day** (owner, 2026-11-19: "go for slimmer button and notes grouped by day").
